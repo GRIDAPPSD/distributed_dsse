@@ -10,14 +10,14 @@ function parse_measurements()
   println("    In parse_measurements function")
   nodename_nodeidx_map = Dict()
   nnode = 0
-  for row in CSV.File("test_4/nodelist.csv", header=false)
+  for row in CSV.File("test/nodelist.csv", header=false)
     nnode += 1
     nodename_nodeidx_map[row[1]] = nnode
   end
   println("    Total number of nodes: $(nnode)")
 
   # figure out how many total measurements we have for allocating arrays
-  nmeas = (open("test_4/measurements.csv") |> readlines |> length) -1
+  nmeas = (open("test/measurements.csv") |> readlines |> length) -1
   println("    Total number of measurements: $(nmeas)")
 
   vi_zidxs = Vector{Int64}()
@@ -28,7 +28,7 @@ function parse_measurements()
   rmat = Array{Float64}(undef, nmeas)
 
   zidx = 0
-  for row in CSV.File("test_4/measurements.csv")
+  for row in CSV.File("test/measurements.csv")
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
     supported = false
@@ -61,7 +61,7 @@ function parse_measurements()
   println("    Number of Qi measurements: $(length(Qi_zidxs))")
 
   Ybus = Dict()
-  for row in CSV.File("test_4/ysparse.csv")
+  for row in CSV.File("test/ysparse.csv")
     if !haskey(Ybus, row[1])
       Ybus[row[1]] = Dict()
     end
@@ -128,7 +128,7 @@ println("Done with defining optimization problem, start solving it...")
 
 # process each timestamp getting measurement data and calling solver
 
-for row in CSV.File("test_4/measurement_data.csv")
+for row in CSV.File("test/measurement_data.csv")
   println("\n================================================================================\n")
 
   # This logic assumes that the order of measurements (columns in a row)
