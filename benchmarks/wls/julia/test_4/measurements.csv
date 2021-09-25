@@ -1,0 +1,17 @@
+sensor_type,sensor_name,node1,node2,value,sigma,is_pseudo,nom_value
+vi,vi_1,one,one,1,0.01,0,1
+vi,vi_2,two,two,1,0.01,0,1
+vi,vi_3,three,three,1,0.01,0,1
+vi,vi_4,four,four,1,0.01,0,1
+Ti,Ti_1,one,one,0,0.01,0,0
+Ti,Ti_2,two,two,0,0.01,0,0
+Ti,Ti_3,three,three,0,0.01,0,0
+Ti,Ti_4,four,four,0,0.01,0,0
+Pi,Pi_1,one,one,0,0.01,0,0
+Pi,Pi_2,two,two,0,0.01,0,0
+Pi,Pi_3,three,three,0,0.01,0,0
+Pi,Pi_4,four,four,0,0.01,0,0
+Qi,Qi_1,one,one,0,0.01,0,0
+Qi,Qi_2,two,two,0,0.01,0,0
+Qi,Qi_3,three,three,0,0.01,0,0
+Qi,Qi_4,four,four,0,0.01,0,0
