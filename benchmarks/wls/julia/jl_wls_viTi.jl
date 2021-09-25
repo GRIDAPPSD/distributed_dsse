@@ -96,5 +96,6 @@ for row in CSV.File("test/measurement_data.csv")
 
   stats = ipopt(nlp)
   print(stats)
+  println("\nFull solution:  $(stats.solution)")
 end
 
