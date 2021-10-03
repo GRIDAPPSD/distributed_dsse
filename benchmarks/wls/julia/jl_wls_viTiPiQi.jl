@@ -65,7 +65,8 @@ function parse_measurements()
     if !haskey(Ybus, row[1])
       Ybus[row[1]] = Dict()
     end
-    Ybus[row[1]][row[2]] = complex(row[3], row[4])
+    # must construct full Ybus, not just lower diagonal elements
+    Ybus[row[1]][row[2]] = Ybus[row[2]][row[1]] = complex(row[3], row[4])
   end
   #println(Ybus)
   #ccall(:jl_exit, Cvoid, (Int32,), 86)
@@ -85,48 +86,80 @@ println("Done parsing files, start defining optimization problem...")
 # just hardwire initial x starting point, x0, for now
 x0 = Array{Float64}(undef, 2*nnode)
 for i = 1:nnode
-  x0[i] = 1.0
+  x0[i] = 1.0 # initial magnitudes
 end
 for i = nnode+1:2*nnode
-  x0[i] = 0.0
+  x0[i] = 0.0 # initial angles
 end
 
 # initialize z here then set values later when iterating over
 # measurement_data.csv
 zvec = Array{Float64}(undef, nz)
 
-vi(x) = sum((zvec[zidx] - x[zidx_nodeidx_map[zidx]])^2/rmat[zidx] for zidx in vi_zidxs)
-Ti(x) = sum((zvec[zidx] - x[zidx_nodeidx_map[zidx]+nnode])^2/rmat[zidx] for zidx in Ti_zidxs)
+# Decomposition primitives for Vi/Ti measurements
+vi(x,i) = x[i]
+vzi(x,zidx) = vi(x,zidx_nodeidx_map[zidx])
 
-# C++ SE code based Pi(x) formulation
-#i = zidx_nodeidx_map[zidx] 
-# Ybus is row and column indexed (dict of dict)
-# If using this formulation, need to get rid of Ybus for i=j (diagonal elements)
-#sum((vi*vi/(ai*ai) * g) - (vi*vj/(ai*aj) * (g*cos(T) + b*sin(T))) for j in Ybus[i].keys) + vi*vi * gii # iterate over all dict keys
+Ti(x,i) = x[i+nnode]
+Tzi(x,zidx) = Ti(x,zidx_nodeidx_map[zidx])
 
-# Power System State Estimation Theory and Implementation book Pi(x) formulation
-#vi * sum(vj*(G*cos(T) + B*sin(T)) for j in Ybus[i].keys)
-#where
+# Decomposed objective functions for Vi/Ti measurements
+Vi(x) = sum((zvec[zidx] - vzi(x,zidx))^2/rmat[zidx] for zidx in vi_zidxs)
+Ti(x) = sum((zvec[zidx] - Tzi(x,zidx))^2/rmat[zidx] for zidx in Ti_zidxs)
+
+# Full form objective functions for Vi/Ti measurements
+# Comment either the ones below out or the ones just above
+#Vi(x) = sum((zvec[zidx] - x[zidx])^2/rmat[zidx] for zidx in vi_zidxs)
+#Ti(x) = sum((zvec[zidx] - x[zidx+nnode])^2/rmat[zidx] for zidx in Ti_zidxs)
+
+# For Pi measurement, from the reference book, "Power System State Estimation 
+# Theory and Implementation":
+# Pi = vi * sum(vj*(G*cos(T) + B*sin(T)) for j in keys(Ybus[zidx_nodeidx_map[zidx]])
+# where
 #  vi = x[zidx_nodeidx_map[zidx]]
 #  vj = x[j]
 #  T = x[zidx_nodeidx_map[zidx] + nnode] - x[j + nnode]
 #  G = real(Ybus[zidx_nodeidx_map[zidx]][j])
 #  B = imag(Ybus[zidx_nodeidx_map[zidx]][j])
-#therefore
-  #PiMeasFunc = x[zidx_nodeidx_map[zidx]] * sum(x[j]*(real(Ybus[zidx_nodeidx_map[zidx]][j])*cos(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode])) + (imag(Ybus[zidx_nodeidx_map[zidx]][j])*sin(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode])) for j in keys(Ybus[zidx_nodeidx_map[zidx]]))
-  #Pi(x) = sum((zvec[zidx] - PiMeasFunc)^2/rmat[zidx] for zidx in Pi_zidxs)
 
-Pi(x) = sum((zvec[zidx] - (x[zidx_nodeidx_map[zidx]] * sum(x[j]*(real(Ybus[zidx_nodeidx_map[zidx]][j])*cos(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode])) + (imag(Ybus[zidx_nodeidx_map[zidx]][j])*sin(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode])) for j in keys(Ybus[zidx_nodeidx_map[zidx]]))))^2/rmat[zidx] for zidx in Pi_zidxs)
+# Decomposition primitives for Pi/Qi measurements
+Gij(i,j) = real(Ybus[i][j])
+Bij(i,j) = imag(Ybus[i][j])
 
-Qi(x) = sum((zvec[zidx] - (x[zidx_nodeidx_map[zidx]] * sum(x[j]*(real(Ybus[zidx_nodeidx_map[zidx]][j])*sin(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode])) - (imag(Ybus[zidx_nodeidx_map[zidx]][j])*cos(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode])) for j in keys(Ybus[zidx_nodeidx_map[zidx]]))))^2/rmat[zidx] for zidx in Pi_zidxs)
+Gzij(zidx,j) = Gij(zidx_nodeidx_map[zidx],j)
+Bzij(zidx,j) = Bij(zidx_nodeidx_map[zidx],j)
 
-f(x) = (length(vi_zidxs)>0 ? vi(x) : 0) + (length(Ti_zidxs)>0 ? Ti(x) : 0) + (length(Pi_zidxs)>0 ? Pi(x) : 0) + (length(Qi_zidxs)>0 ? Qi(x) : 0)
+vj(x,j) = vi(x,j)
+
+Tij(x,i,j) = Ti(x,i) - Ti(x,j)
+Tzij(x,zidx,j) = Tij(x,zidx_nodeidx_map[zidx],j)
+
+# Decomposed objective functions for Pi/Qi measurements
+h_Pi(x,zidx) = vzi(x,zidx) * sum(vj(x,j)*(Gzij(zidx,j)*cos(Tzij(x,zidx,j)) + Bzij(zidx,j)*sin(Tzij(x,zidx,j))) for j in keys(Ybus[zidx_nodeidx_map[zidx]]))
+Pi(x) = sum((zvec[zidx] - h_Pi(x,zidx))^2/rmat[zidx] for zidx in Pi_zidxs)
+
+h_Qi(x,zidx) = vzi(x,zidx) * sum(vj(x,j)*(Gzij(zidx,j)*sin(Tzij(x,zidx,j)) - Bzij(zidx,j)*cos(Tzij(x,zidx,j))) for j in keys(Ybus[zidx_nodeidx_map[zidx]]))
+Qi(x) = sum((zvec[zidx] - h_Qi(x,zidx))^2/rmat[zidx] for zidx in Qi_zidxs)
+
+Pi(x) = sum((zvec[zidx] - h_Pi(x,zidx))^2/rmat[zidx] for zidx in Pi_zidxs)
+Qi(x) = sum((zvec[zidx] - h_Qi(x,zidx))^2/rmat[zidx] for zidx in Qi_zidxs)
+
+# Full form objective functions for Pi/Qi measurements
+# Comment either the ones below out or the ones just above
+#Pi(x) = sum((zvec[zidx] - (x[zidx_nodeidx_map[zidx]] * sum(x[j]*(real(Ybus[zidx_nodeidx_map[zidx]][j])*cos(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode]) + imag(Ybus[zidx_nodeidx_map[zidx]][j])*sin(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode])) for j in keys(Ybus[zidx_nodeidx_map[zidx]]))))^2/rmat[zidx] for zidx in Pi_zidxs)
+#Qi(x) = sum((zvec[zidx] - (x[zidx_nodeidx_map[zidx]] * sum(x[j]*(real(Ybus[zidx_nodeidx_map[zidx]][j])*sin(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode]) - imag(Ybus[zidx_nodeidx_map[zidx]][j])*cos(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode])) for j in keys(Ybus[zidx_nodeidx_map[zidx]]))))^2/rmat[zidx] for zidx in Qi_zidxs)
+
+# Final objective function over all measurement types
+f(x) = (length(vi_zidxs)>0 ? Vi(x) : 0) + (length(Ti_zidxs)>0 ? Ti(x) : 0) + (length(Pi_zidxs)>0 ? Pi(x) : 0) + (length(Qi_zidxs)>0 ? Qi(x) : 0)
 
 nlp = ADNLPModel(f, x0)
 
 println("Done with defining optimization problem, start solving it...")
 
 # process each timestamp getting measurement data and calling solver
+
+# MATLAB FPI solver solution for the 4-node test case 
+target_solution = [1.0000, 0.971576218875089, 0.956643047805180, 0.950535446461549, 0.0, 0.0, 0.0, 0.0] # FPI solver 10,000 iterations
 
 for row in CSV.File("test/measurement_data.csv")
   println("\n================================================================================\n")
@@ -145,5 +178,27 @@ for row in CSV.File("test/measurement_data.csv")
   stats = ipopt(nlp)
   print(stats)
   println("\nFull solution:  $(stats.solution)")
+
+  # Note this needs to be commented out for other than the 4-node test case
+  diff_solution = stats.solution - target_solution
+  println("\nTarget solution difference:  $(diff_solution)")
+
+  #pisolution = Pi(stats.solution)
+  #println("\nPi(solution):  $(pisolution)")
+
+  #for zidx in Pi_zidxs
+  #  hi = h_Pi(stats.solution,zidx)
+  #  println("\nh_$(zidx)(x*): $(hi)")
+
+  #  hi_exp = h_Pi(target_solution,zidx)
+  #  println("h_$(zidx)(x_exp): $(hi_exp)")
+
+  #  for j in keys(Ybus[zidx_nodeidx_map[zidx]])
+  #    branchP = vzi(target_solution,zidx) * vj(target_solution,j)*(Gzij(zidx,j)*cos(Tzij(target_solution,zidx,j)) + Bzij(zidx,j)*sin(Tzij(target_solution,zidx,j)))
+  #    i = zidx_nodeidx_map[zidx]
+  #    println("\tbranch_$(i)_$(j): $(branchP)")
+  #  end
+  #end
+  
 end
 
