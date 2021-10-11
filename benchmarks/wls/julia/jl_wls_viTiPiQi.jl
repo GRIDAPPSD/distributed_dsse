@@ -160,6 +160,8 @@ println("Done with defining optimization problem, start solving it...")
 
 # MATLAB FPI solver solution for the 4-node test case 
 #target_solution = [1.0000, 0.971576218875089, 0.956643047805180, 0.950535446461549, 0.0, 0.0, 0.0, 0.0] # FPI solver 10,000 iterations
+# MATLAB FPI solver solution for the 3p6 test case 
+target_solution = [1.0, 1.0, 1.0, 0.9712111193225086, 0.9410836694466717, 0.9223652753951702, 0.0, -2.0943951023931957, 2.0943951023931953, -0.0375155389352858, -2.1362637169183625, 2.0491375942741321] 
 
 for row in CSV.File("test/measurement_data.csv")
   println("\n================================================================================\n")
@@ -183,22 +185,22 @@ for row in CSV.File("test/measurement_data.csv")
   #diff_solution = stats.solution - target_solution
   #println("\nTarget solution difference:  $(diff_solution)")
 
-  #pisolution = Pi(stats.solution)
-  #println("\nPi(solution):  $(pisolution)")
+  pisolution = Pi(stats.solution)
+  println("\nPi(solution):  $(pisolution)")
 
-  #for zidx in Pi_zidxs
-  #  hi = h_Pi(stats.solution,zidx)
-  #  println("\nh_$(zidx)(x*): $(hi)")
+  for zidx in Pi_zidxs
+    hi = h_Pi(stats.solution,zidx)
+    println("\nh_$(zidx)(x*): $(hi)")
 
-  #  hi_exp = h_Pi(target_solution,zidx)
-  #  println("h_$(zidx)(x_exp): $(hi_exp)")
+    hi_exp = h_Pi(target_solution,zidx)
+    println("h_$(zidx)(x_exp): $(hi_exp)")
 
-  #  for j in keys(Ybus[zidx_nodeidx_map[zidx]])
-  #    branchP = vzi(target_solution,zidx) * vj(target_solution,j)*(Gzij(zidx,j)*cos(Tzij(target_solution,zidx,j)) + Bzij(zidx,j)*sin(Tzij(target_solution,zidx,j)))
-  #    i = zidx_nodeidx_map[zidx]
-  #    println("\tbranch_$(i)_$(j): $(branchP)")
-  #  end
-  #end
+    for j in keys(Ybus[zidx_nodeidx_map[zidx]])
+      branchP = vzi(target_solution,zidx) * vj(target_solution,j)*(Gzij(zidx,j)*cos(Tzij(target_solution,zidx,j)) + Bzij(zidx,j)*sin(Tzij(target_solution,zidx,j)))
+      i = zidx_nodeidx_map[zidx]
+      println("\tbranch_$(i)_$(j): $(branchP)")
+    end
+  end
   
 end
 
