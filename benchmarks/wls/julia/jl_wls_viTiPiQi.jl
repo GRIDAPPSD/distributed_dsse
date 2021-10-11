@@ -159,7 +159,7 @@ println("Done with defining optimization problem, start solving it...")
 # process each timestamp getting measurement data and calling solver
 
 # MATLAB FPI solver solution for the 4-node test case 
-target_solution = [1.0000, 0.971576218875089, 0.956643047805180, 0.950535446461549, 0.0, 0.0, 0.0, 0.0] # FPI solver 10,000 iterations
+#target_solution = [1.0000, 0.971576218875089, 0.956643047805180, 0.950535446461549, 0.0, 0.0, 0.0, 0.0] # FPI solver 10,000 iterations
 
 for row in CSV.File("test/measurement_data.csv")
   println("\n================================================================================\n")
@@ -180,8 +180,8 @@ for row in CSV.File("test/measurement_data.csv")
   println("\nFull solution:  $(stats.solution)")
 
   # Note this needs to be commented out for other than the 4-node test case
-  diff_solution = stats.solution - target_solution
-  println("\nTarget solution difference:  $(diff_solution)")
+  #diff_solution = stats.solution - target_solution
+  #println("\nTarget solution difference:  $(diff_solution)")
 
   #pisolution = Pi(stats.solution)
   #println("\nPi(solution):  $(pisolution)")
