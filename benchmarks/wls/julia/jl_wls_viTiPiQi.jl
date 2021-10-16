@@ -146,9 +146,6 @@ end
   h_Qi(x,zidx) = vzi(x,zidx) * sum(vj(x,j)*(Gzij(zidx,j)*sin(Tzij(x,zidx,j)) - Bzij(zidx,j)*cos(Tzij(x,zidx,j))) for j in keys(Ybus[zidx_nodeidx_map[zidx]]))
   Qi(x) = sum((zvec[zidx] - h_Qi(x,zidx))^2/rmat[zidx] for zidx in Qi_zidxs)
 
-  Pi(x) = sum((zvec[zidx] - h_Pi(x,zidx))^2/rmat[zidx] for zidx in Pi_zidxs)
-  Qi(x) = sum((zvec[zidx] - h_Qi(x,zidx))^2/rmat[zidx] for zidx in Qi_zidxs)
-
   # Full form objective functions for Pi/Qi measurements
   # Comment either the ones below out or the ones just above
   #Pi(x) = sum((zvec[zidx] - (x[zidx_nodeidx_map[zidx]] * sum(x[j]*(real(Ybus[zidx_nodeidx_map[zidx]][j])*cos(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode]) + imag(Ybus[zidx_nodeidx_map[zidx]][j])*sin(x[zidx_nodeidx_map[zidx]+nnode] - x[j+nnode])) for j in keys(Ybus[zidx_nodeidx_map[zidx]]))))^2/rmat[zidx] for zidx in Pi_zidxs)
