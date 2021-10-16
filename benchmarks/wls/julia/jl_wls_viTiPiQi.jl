@@ -114,8 +114,9 @@ end
 
   # Full form objective functions for Vi/Ti measurements
   # Comment either the ones below out or the ones just above
-  #Vi(x) = sum((zvec[zidx] - x[zidx])^2/rmat[zidx] for zidx in vi_zidxs)
-  #Ti(x) = sum((zvec[zidx] - x[zidx+nnode])^2/rmat[zidx] for zidx in Ti_zidxs)
+  #Vi(x) = sum((zvec[zidx] - x[zidx_nodeidx_map[zidx]])^2/rmat[zidx] for zidx in vi_zidxs)
+  #Ti(x) = sum((zvec[zidx] - x[zidx_nodeidx_map[zidx]+nnode])^2/rmat[zidx] for zidx in Ti_zidxs)
+
 
   # For Pi measurement, from the reference book, "Power System State Estimation 
   # Theory and Implementation":
