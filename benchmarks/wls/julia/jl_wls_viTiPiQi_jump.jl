@@ -109,6 +109,7 @@ zvec = Array{Float64}(undef, nmeas)
 
 @variable(nlp,-0.5 <= v[1:nnode] <= 1.5,start=1.0)
 @variable(nlp,-pi <= T[1:nnode] <= pi,start=0.0)
+#@variable(nlp,-pi <= x[1:2*nnode] <= pi,start=1.0)
 
 #@NLexpression(nlp,vi[1],sum((zvec[i] - v[measidx_nodeidx_map[i]])^2/rmat[i] for i in vi_measidxs))
 #@NLexpression(nlp,Ti[1],sum((zvec[i] - T[measidx_nodeidx_map[i]])^2/rmat[i] for i in Ti_measidxs))
@@ -125,7 +126,6 @@ zvec = Array{Float64}(undef, nmeas)
 #print(nlp)
  
 #nlp = ADNLPModel(f, x0)
-
 
 println("Done with defining optimization problem, start solving it...")
 
@@ -153,10 +153,20 @@ for row in CSV.File("test/measurement_data.csv")
 
     sum((zvec[i] - (v[measidx_nodeidx_map[i]] * sum(v[j]*(YbusG[measidx_nodeidx_map[i]][j]*sin(T[measidx_nodeidx_map[i]] - T[j]) - YbusB[measidx_nodeidx_map[i]][j]*cos(T[measidx_nodeidx_map[i]] - T[j])) for j in keys(YbusG[measidx_nodeidx_map[i]]))))^2/rmat[i] for i in Qi_measidxs))
 
+  #@NLobjective(nlp, Min,
+  #  sum((zvec[i] - x[measidx_nodeidx_map[i]])^2/rmat[i] for i in vi_measidxs) +
+
+  #  sum((zvec[i] - x[measidx_nodeidx_map[i]+nnode])^2/rmat[i] for i in Ti_measidxs) +
+
+  #  sum((zvec[i] - (x[measidx_nodeidx_map[i]] * sum(x[j]*(YbusG[measidx_nodeidx_map[i]][j]*cos(x[measidx_nodeidx_map[i]+nnode] - x[j+nnode]) + YbusB[measidx_nodeidx_map[i]][j]*sin(x[measidx_nodeidx_map[i]+nnode] - x[j+nnode])) for j in keys(YbusG[measidx_nodeidx_map[i]]))))^2/rmat[i] for i in Pi_measidxs) +
+
+  #  sum((zvec[i] - (x[measidx_nodeidx_map[i]] * sum(x[j]*(YbusG[measidx_nodeidx_map[i]][j]*sin(x[measidx_nodeidx_map[i]+nnode] - x[j+nnode]) - YbusB[measidx_nodeidx_map[i]][j]*cos(x[measidx_nodeidx_map[i]+nnode] - x[j+nnode])) for j in keys(YbusG[measidx_nodeidx_map[i]]))))^2/rmat[i] for i in Qi_measidxs))
+
   @time optimize!(nlp)
   solution_summary(nlp, verbose=true)
   println("v = $(value.(v))")
   println("T = $(value.(T))")
+  #println("x = $(value.(x))")
   #stats = ipopt(nlp)
   #print(stats)
   #println("\nFull solution:  $(stats.solution)")
