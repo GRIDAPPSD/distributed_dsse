@@ -94,15 +94,6 @@ nnode, nmeas, rmat, measidx_nodeidx_map, vi_measidxs, Ti_measidxs, Pi_measidxs, 
 
 println("Done parsing files, start defining optimization problem...")
 
-# just hardwire initial x starting point, x0, for now
-#x0 = Array{Float64}(undef, 2*nnode)
-#for i = 1:nnode
-#  x0[i] = 1.0
-#end
-#for i = nnode+1:2*nnode
-#  x0[i] = 0.0
-#end
-
 # initialize z here then set values later when iterating over
 # measurement_data.csv
 zvec = Array{Float64}(undef, nmeas)
@@ -113,20 +104,9 @@ zvec = Array{Float64}(undef, nmeas)
 
 #@NLexpression(nlp,vi[1],sum((zvec[i] - v[measidx_nodeidx_map[i]])^2/rmat[i] for i in vi_measidxs))
 #@NLexpression(nlp,Ti[1],sum((zvec[i] - T[measidx_nodeidx_map[i]])^2/rmat[i] for i in Ti_measidxs))
-
-#vi(x) = sum((zvec[i] - x[measidx_nodeidx_map[i]])^2/rmat[i] for i in vi_measidxs)
-#Ti(x) = sum((zvec[i] - x[measidx_nodeidx_map[i]+nnode])^2/rmat[i] for i in Ti_measidxs)
-
-#f(x) = (length(vi_measidxs)>0 ? vi(x) : 0) + (length(Ti_measidxs)>0 ? Ti(x) : 0)
-
 #@NLobjective(nlp,Min,vi[1]+Ti[1])
-#@NLobjective(nlp, Min,
-#         sum((zvec[i] - v[measidx_nodeidx_map[i]])^2/rmat[i] for i in vi_measidxs) +
-#         sum((zvec[i] - T[measidx_nodeidx_map[i]])^2/rmat[i] for i in Ti_measidxs))
 #print(nlp)
  
-#nlp = ADNLPModel(f, x0)
-
 println("Done with defining optimization problem, start solving it...")
 
 # process each timestamp getting measurement data and calling solver
@@ -167,8 +147,5 @@ for row in CSV.File("test/measurement_data.csv")
   println("v = $(value.(v))")
   println("T = $(value.(T))")
   #println("x = $(value.(x))")
-  #stats = ipopt(nlp)
-  #print(stats)
-  #println("\nFull solution:  $(stats.solution)")
 end
 
