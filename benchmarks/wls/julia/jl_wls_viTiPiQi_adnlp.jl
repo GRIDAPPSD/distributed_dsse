@@ -184,6 +184,7 @@ end
     #@time stats = ipopt(nlp)
     #@time stats = ipopt(nlp, tol=1e-10)
     @time stats = ipopt(nlp, tol=1e-12)
+    @time stats = ipopt(nlp, tol=1e-12)
     print(stats)
     println("\nFull solution:  $(stats.solution)")
 
