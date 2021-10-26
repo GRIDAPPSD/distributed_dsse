@@ -2,8 +2,11 @@
 
 import math
 
+def noground(x):
+  return x
+
 def ground(x):
-  return round(x*10.0)/10.0
+  return round(x*100.0)/100.0
 
 # read vnom.csv into dictionary
 #Nodename,Mag,Arg
