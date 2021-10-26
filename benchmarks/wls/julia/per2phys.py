@@ -53,20 +53,20 @@ with open('measurements.csv') as measfile:
     MeasNode[idx] = fields[2]
 
     if fields[0] == 'vi':
-      zval = ground(float(fields[4]) * VnomMag[fields[2]])
-      zsig = ground(float(fields[5]) * VnomMag[fields[2]])
-      znomval = ground(float(fields[7]) * VnomMag[fields[2]])
+      zval = noground(float(fields[4]) * VnomMag[fields[2]])
+      zsig = noground(float(fields[5]) * VnomMag[fields[2]])
+      znomval = noground(float(fields[7]) * VnomMag[fields[2]])
     elif fields[0] == 'Ti':
-      zval = ground(float(fields[4]))
-      zsig = ground(float(fields[5]))
-      znomval = ground(float(fields[7]))
-      #zval = ground(float(fields[4]) + VnomArg[fields[2]])
-      #zsig = ground(float(fields[5]) + VnomArg[fields[2]])
-      #znomval = ground(float(fields[7]) + VnomArg[fields[2]])
+      zval = noground(float(fields[4]))
+      zsig = noground(float(fields[5]))
+      znomval = noground(float(fields[7]))
+      #zval = noground(float(fields[4]) + VnomArg[fields[2]])
+      #zsig = noground(float(fields[5]) + VnomArg[fields[2]])
+      #znomval = noground(float(fields[7]) + VnomArg[fields[2]])
     else: # Pi and Qi
-      zval = ground(float(fields[4]) * sbase)
-      zsig = ground(float(fields[5]) * sbase)
-      znomval = ground(float(fields[7]) * sbase)
+      zval = noground(float(fields[4]) * sbase)
+      zsig = noground(float(fields[5]) * sbase)
+      znomval = noground(float(fields[7]) * sbase)
 
     newmeasfile.write(fields[0]+','+fields[1]+','+fields[2]+','+fields[3]+','+str(zval)+','+str(zsig)+','+fields[6]+','+str(znomval)+'\n')
 
@@ -87,11 +87,11 @@ with open('measurement_data.csv') as datafile:
 
     for idx in range(1, len(fields)):
       if MeasType[idx] == 'vi':
-        zval = ground(float(fields[idx]) * VnomMag[MeasNode[idx]])
+        zval = noground(float(fields[idx]) * VnomMag[MeasNode[idx]])
       elif MeasType[idx] == 'Ti':
-        zval = ground(float(fields[idx]) + VnomArg[MeasNode[idx]])
+        zval = noground(float(fields[idx]) + VnomArg[MeasNode[idx]])
       else: # Pi or Qi
-        zval = ground(float(fields[idx]) * sbase)
+        zval = noground(float(fields[idx]) * sbase)
 
       newdatafile.write(','+str(zval))
     newdatafile.write('\n')
