@@ -97,10 +97,10 @@ println("Done parsing files, start defining optimization problem...")
 # measurement_data.csv
 @NLparameter(nlp,zvec[i=1:nmeas] == 0)
 
-@variable(nlp,-0.5 <= v[1:nnode] <= 1.5,start=1.0)
-@variable(nlp,-pi <= T[1:nnode] <= pi,start=0.0)
-#@variable(nlp,v[1:nnode],start=1.0)
-#@variable(nlp,T[1:nnode],start=0.0)
+#@variable(nlp,-0.5 <= v[1:nnode] <= 1.5,start=1.0)
+#@variable(nlp,-pi <= T[1:nnode] <= pi,start=0.0)
+@variable(nlp,v[1:nnode],start=1.0)
+@variable(nlp,T[1:nnode],start=0.0)
 
 @NLexpression(nlp, vzi[i=1:nmeas], v[measidx_nodeidx_map[i]])
 
