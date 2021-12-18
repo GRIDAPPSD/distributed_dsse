@@ -6,7 +6,7 @@ def noground(x):
   return x
 
 def ground(x):
-  return round(x*100.0)/100.0
+  return round(x, 2)
 
 # read vnom.csv into dictionary
 #Nodename,Mag,Arg
