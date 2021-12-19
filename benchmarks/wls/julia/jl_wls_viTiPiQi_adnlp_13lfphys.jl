@@ -89,13 +89,15 @@ end
   println("Done parsing files, start defining optimization problem...")
 
   # just hardwire initial x starting point, x0, for now
-  x0 = Array{Float64}(undef, 2*nnode)
-  for i = 1:nnode
-    x0[i] = 1.0 # initial magnitudes
-  end
-  for i = nnode+1:2*nnode
-    x0[i] = 0.0 # initial angles
-  end
+  #x0 = Array{Float64}(undef, 2*nnode)
+  #for i = 1:nnode
+  ##  x0[i] = 1.0 # initial magnitudes
+  #  x0[i] = 2401.6 # initial magnitudes
+  #end
+  #for i = nnode+1:2*nnode
+  #  x0[i] = 0.0 # initial angles
+  #end
+  x0 = [2280.1462224653337216, 2370.9304940663460002, 2291.1990472686602516, 2279.9611038436473791, 2370.9035460218810840, 2291.0555032704160112, 2362.1820781162941785, 2337.7110672203370996, 2362.1808119583511143, 2337.7095243841390584, 2277.5348581324765291, 2290.0280729393575712, 2334.7435197623253771, 2373.6298734831798356, 2340.0148421246135513, 2316.8779210656639407, 2371.6005614140126454, 2322.1821129960808321, 2269.9339329437420929, 2401.5701366959156076, 2401.6286457108431023, 2401.5788837522886752, 2270.2660272739585707, 2372.2073571348391852, 2286.7886768931412007, 2288.8924150224479490, 2330.3982535612799438, 2371.3599533499755125, 2337.0292728757217446, 2280.1464074987165986, 2370.9306694021715884, 2291.1992213259291020, 66395.3000000000029104, 66395.2999999999883585, 66395.2999999999883585, 2401.7203364564375079, 2401.7385918339664386, 2401.7263986362404466, 265.3904791881118967, 270.9028417125392707, 266.9026023653719903, -0.0480446300322439, -2.1104985943393637, 2.0545258974007106, -0.0480650512861194, -2.1104993103261331, 2.0545086644810366, -2.1086030027029521, 2.0722242874676491, -2.1086034364935085, 2.0722245481961461, -0.0480391337561771, 2.0529656575179640, -0.0229219642187778, -2.1069033570263000, 2.0719690478578934, -0.0311579982700007, -2.1080452706239958, 2.0654498954911631, -0.0476869700719445, -0.0000394796490696, -2.0944289185520728, 2.0943476493206190, -0.0494099448676698, -2.1112820332230458, 2.0554359284967827, 2.0509730331871685, -0.0234745221225297, -2.1072314747030054, 2.0717780313744405, -0.0480446535613301, -2.1104986233690131, 2.0545258706446399, 0.5235987755982988, -1.5707963267948963, 2.6179938779914944, -0.0000273674186166, -2.0944166624406009, 2.0943655287652119, -0.0297801199764095, -2.1114943921009415, 2.0673840447661922]
 
   # initialize z here then set values later when iterating over
   # measurement_data.csv
@@ -155,7 +157,7 @@ end
   # Final objective function over all measurement types
   f(x) = (length(vi_zidxs)>0 ? Vi(x) : 0) + (length(Ti_zidxs)>0 ? Ti(x) : 0) + (length(Pi_zidxs)>0 ? Pi(x) : 0) + (length(Qi_zidxs)>0 ? Qi(x) : 0)
 
-  #nlp = ADNLPModel(f, x0)
+  nlp = ADNLPModel(f, x0)
 
   println("Done with defining optimization problem, start solving it...")
 
@@ -184,18 +186,24 @@ end
     #stats = ipopt(nlp, print_level=10)
     #stats = ipopt(nlp, tol=1e-12, acceptable_tol=1e-10)
     #@time stats = ipopt(nlp)
-    #@time stats = ipopt(nlp, tol=1e-10)
+    #@time stats = ipopt(nlp, tol=1e-2, acceptable_tol=1e-1, max_iter=1000)
+    #@time stats = ipopt(nlp, tol=1e-2, max_iter=100)
+    @time stats = ipopt(nlp, tol=1e-1, max_iter=1000)
     #@time stats = ipopt(nlp, tol=1e-12, max_iter=1000)
     #@time stats = ipopt(nlp, tol=1e-12, max_iter=100)
-    #print(stats)
-    #println("\nFull solution:  $(stats.solution)")
+    print(stats)
+    println("\nFull solution:  $(stats.solution)")
 
     # Note this needs to be commented out for other than the 4-node test case
-    #diff_solution = stats.solution - target_solution
-    #println("\nTarget solution difference:  $(diff_solution)")
+    diff_solution = stats.solution - target_solution
+    println("\nTarget solution difference:  $(diff_solution)")
+    println("\nMaximum solution difference:  $(findmax(diff_solution))")
 
     #pisolution = Pi(stats.solution)
     #println("\nPi(solution):  $(pisolution)")
+
+    f_exp = f(target_solution)
+    println("f(x_exp): $(f_exp)")
 
     for zidx in Pi_zidxs
     #  hi = h_Pi(stats.solution,zidx)
