@@ -183,8 +183,7 @@ end
     #stats = ipopt(nlp, tol=1e-12, acceptable_tol=1e-10)
     #@time stats = ipopt(nlp)
     #@time stats = ipopt(nlp, tol=1e-10)
-    @time stats = ipopt(nlp, tol=1e-12)
-    @time stats = ipopt(nlp, tol=1e-12)
+    @time stats = ipopt(nlp, tol=1e-12, max_iter=1000)
     print(stats)
     println("\nFull solution:  $(stats.solution)")
 
