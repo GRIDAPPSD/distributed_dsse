@@ -9,10 +9,12 @@ println("After using statements")
 function parse_measurements()
   println("    In parse_measurements function")
   nodename_nodeidx_map = Dict()
+  nodeidx_nodename_map = Dict()
   nnode = 0
   for row in CSV.File("test/nodelist.csv", header=false)
     nnode += 1
     nodename_nodeidx_map[row[1]] = nnode
+    nodeidx_nodename_map[nnode] = row[1]
   end
   println("    Total number of nodes: $(nnode)")
 
@@ -71,7 +73,7 @@ function parse_measurements()
   #println(Ybus)
   #ccall(:jl_exit, Cvoid, (Int32,), 86)
 
-  return nnode, nmeas, rmat, zidx_nodeidx_map, vi_zidxs, Ti_zidxs, Pi_zidxs, Qi_zidxs, Ybus
+  return nnode, nmeas, rmat, zidx_nodeidx_map, vi_zidxs, Ti_zidxs, Pi_zidxs, Qi_zidxs, Ybus, nodeidx_nodename_map
 end
 
 
@@ -84,19 +86,31 @@ end
 #function optimize()
   println("Start parsing files...")
 
-  nnode, nz, rmat, zidx_nodeidx_map, vi_zidxs, Ti_zidxs, Pi_zidxs, Qi_zidxs, Ybus = parse_measurements()
+  nnode, nz, rmat, zidx_nodeidx_map, vi_zidxs, Ti_zidxs, Pi_zidxs, Qi_zidxs, Ybus, nodeidx_nodename_map = parse_measurements()
 
   println("Done parsing files, start defining optimization problem...")
 
   # just hardwire initial x starting point, x0, for now
   x0 = Array{Float64}(undef, 2*nnode)
-  for i = 1:nnode
-  #  x0[i] = 1.0 # initial magnitudes
-    x0[i] = 2401.6 # initial magnitudes
-  end
-  for i = nnode+1:2*nnode
-    x0[i] = 0.0 # initial angles
-  end
+  #for i = 1:nnode
+  #  x0[i] = 2401.6 # initial magnitudes
+  #end
+  # hardwire source bus to 66395.3 since it struggles to get there
+  #x0[33] = 66395.3
+  #x0[34] = 66395.3
+  #x0[35] = 66395.3
+
+  #for i = nnode+1:2*nnode
+  #  node = nodeidx_nodename_map[i-nnode]
+  #  if endswith(node, ".1")
+  #    x0[i] = 0.0
+  #  elseif endswith(node, ".2")
+  #    x0[i] = deg2rad(-120.0)
+  #  else
+  #    x0[i] = deg2rad(120.0)
+  #  end
+  #  println("Initializing angle node $(node) to: $(x0[i])")
+  #end
   x0 = [2283.0834341589052201,2372.3754031263556499,2294.3624201193733825,2282.8985641419048989,2372.3484716871507771,2294.2190783191026640,2363.2752997397833497,2339.3809287173489793,2361.2315564450464080,2336.8924815796344774,2280.4987463440056672,2293.2337589443063735,2336.1909734539181045,2374.6161345817708934,2341.6688920407827936,2318.8179479999921568,2372.7592114495701026,2324.3778369779993227,2273.0063120857521426,2401.4131985750614149,2401.5134749777644174,2401.4247885560480427,2273.3742005452431840,2373.6699522389599224,2290.0518874935391977,2292.1405804143196292,2331.8752568378727119,2372.3604465902581069,2338.7013584566648206,2283.0836188232692621,2372.3755788026765003,2294.3625947736331909,66395.3000000000174623,66395.2999999999883585,66395.2999999999883585,2401.7203456675565576,2401.7385699396149903,2401.7264235380616810,265.5451524017101974,271.0012011180325544,267.0795161521803038,-0.0487008581519078,-2.1110176173411861,2.0538786105973394,-0.0487212231106527,-2.1110183324034084,2.0538614270470061,-2.1089698863920869,2.0717849099347547,-2.1096690990054103,2.0722047197955713,-0.0487015503792061,2.0523279899930449,-0.0233251756205417,-2.1072557600226691,2.0715461941386337,-0.0316480734366957,-2.1084606908889381,2.0649449934416371,-0.0483711665236682,-0.0000521372337437,-2.0944418330827110,2.0943289314156139,-0.0500893376253135,-2.1118074287584010,2.0547562138638016,2.0503481067922014,-0.0239046059606650,-2.1076067335546274,2.0713291512159540,-0.0487008796533500,-2.1110176441267274,2.0538785857932265,0.5235987755982987,-1.5707963267948968,2.6179938779914944,-0.0000273642134291,-2.0944166946151137,2.0943655274575939,-0.0303208337814400,-2.1119850227417052,2.0668226042254458]
 
   # initialize z here then set values later when iterating over
@@ -187,10 +201,8 @@ end
     #stats = ipopt(nlp, tol=1e-12, acceptable_tol=1e-10)
     #@time stats = ipopt(nlp)
     #@time stats = ipopt(nlp, tol=1e-2, acceptable_tol=1e-1, max_iter=1000)
-    #@time stats = ipopt(nlp, tol=1e-2, max_iter=100)
-    @time stats = ipopt(nlp, tol=1e-1, max_iter=1000)
-    #@time stats = ipopt(nlp, tol=1e-12, max_iter=1000)
-    #@time stats = ipopt(nlp, tol=1e-12, max_iter=100)
+    #@time stats = ipopt(nlp, tol=1e-1, max_iter=1000)
+    @time stats = ipopt(nlp, tol=1e-2, max_iter=500) # struggles even starting at solution
     print(stats)
     println("\nFull solution:  $(stats.solution)")
 
@@ -207,6 +219,11 @@ end
 
     f_sol = f(stats.solution)
     println("f(x_sol): $(f_sol)")
+
+    println("\nAndy special: v target vs. solution side-by-side and diff...")
+    for i = 1:nnode
+      println("$(nodeidx_nodename_map[i]) trgt: $(target_solution[i]), soln: $(stats.solution[i]), diff: $(abs(target_solution[i]-stats.solution[i]))")
+    end
 
     for zidx in Pi_zidxs
     #  hi = h_Pi(stats.solution,zidx)
