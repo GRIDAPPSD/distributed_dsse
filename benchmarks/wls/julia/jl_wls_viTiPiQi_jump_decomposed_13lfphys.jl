@@ -7,10 +7,12 @@ using SparseArrays
 
 function parse_measurements()
   nodename_nodeidx_map = Dict()
+  nodeidx_nodename_map = Dict()
   nnode = 0
   for row in CSV.File("test/nodelist.csv", header=false)
     nnode += 1
     nodename_nodeidx_map[row[1]] = nnode
+    nodeidx_nodename_map[nnode] = row[1]
   end
   println("    Total number of nodes: $(nnode)")
 
@@ -78,7 +80,7 @@ function parse_measurements()
     YbusB[row[1]][row[2]] = YbusB[row[2]][row[1]] = row[4]
   end
 
-  return nnode, nmeas, rmat, measidx_nodeidx_map, vi_measidxs, Ti_measidxs, Pi_measidxs, Qi_measidxs, YbusG, YbusB
+  return nnode, nmeas, rmat, measidx_nodeidx_map, vi_measidxs, Ti_measidxs, Pi_measidxs, Qi_measidxs, YbusG, YbusB, nodeidx_nodename_map
 end
 
 
@@ -86,11 +88,13 @@ end
 
 #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"max_iter"=>80))
 #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1, "max_iter"=>10000))
-nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1,"max_iter"=>10000))
+#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1,"max_iter"=>10000))
+#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1,"max_iter"=>10000))
+nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10,"max_iter"=>10000))
 
 println("Start parsing files...")
 
-nnode, nmeas, rmat, measidx_nodeidx_map, vi_measidxs, Ti_measidxs, Pi_measidxs, Qi_measidxs, YbusG, YbusB = parse_measurements()
+nnode, nmeas, rmat, measidx_nodeidx_map, vi_measidxs, Ti_measidxs, Pi_measidxs, Qi_measidxs, YbusG, YbusB, nodeidx_nodename_map = parse_measurements()
 
 println("Done parsing files, start defining optimization problem...")
 
@@ -103,13 +107,38 @@ T_target_solution = [-0.0487008581519078,-2.1110176173411861,2.0538786105973394,
 
 #@variable(nlp,-0.5 <= v[1:nnode] <= 1.5,start=1.0)
 #@variable(nlp,-pi <= T[1:nnode] <= pi,start=0.0)
-#@variable(nlp,v[1:nnode],start=1.0)
-@variable(nlp,v[1:nnode],start=2401.6)
-@variable(nlp,T[1:nnode],start=0.0)
+
+#@variable(nlp,v[1:nnode],start=2401.6)
 #@variable(nlp,v[1:nnode])
-#set_start_value.(v, v_target_solution)
+#for i = 1:nnode
+#  if i==33
+#    set_start_value.(v[i], 66395.3)
+#  elseif i==34
+#    set_start_value.(v[i], 66395.3)
+#  elseif i==35
+#    set_start_value.(v[i], 66395.3)
+#  else
+#    set_start_value.(v[i], 2401.6)
+#  end
+#end
+
+#@variable(nlp,T[1:nnode],start=0.0)
 #@variable(nlp,T[1:nnode])
-#set_start_value.(T, T_target_solution)
+#for i = 1:nnode
+#  node = nodeidx_nodename_map[i]
+#  if endswith(node, ".1")
+#    set_start_value.(T[i], 0.0)
+#  elseif endswith(node, ".2")
+#    set_start_value.(T[i], deg2rad(-120.0))
+#  else
+#    set_start_value.(T[i], deg2rad(120.0))
+#  end
+#end
+
+@variable(nlp,v[1:nnode])
+set_start_value.(v, v_target_solution)
+@variable(nlp,T[1:nnode])
+set_start_value.(T, T_target_solution)
 
 @NLexpression(nlp, vzi[i=1:nmeas], v[measidx_nodeidx_map[i]])
 
@@ -171,5 +200,10 @@ for row in CSV.File("test/measurement_data.csv")
 
   println("\nT target solution difference:  $(T_diff_solution)")
   println("\nT maximum solution difference:  $(findmax(T_diff_solution))")
+
+  println("\nAndy special: v target vs. solution side-by-side and diff...")
+  for i = 1:nnode
+    println("$(nodeidx_nodename_map[i]) trgt: $(v_target_solution[i]), soln: $(value.(v[i])), diff: $(abs(v_target_solution[i]-value.(v[i])))")
+  end
 end
 
