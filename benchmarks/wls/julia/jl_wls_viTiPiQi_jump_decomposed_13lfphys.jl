@@ -90,7 +90,8 @@ end
 #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1, "max_iter"=>10000))
 #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1,"max_iter"=>10000))
 #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1,"max_iter"=>10000))
-nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10,"max_iter"=>10000))
+nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1,"max_iter"=>1000))
+#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10,"max_iter"=>5000))
 
 println("Start parsing files...")
 
@@ -109,36 +110,41 @@ T_target_solution = [-0.0487008581519078,-2.1110176173411861,2.0538786105973394,
 #@variable(nlp,-pi <= T[1:nnode] <= pi,start=0.0)
 
 #@variable(nlp,v[1:nnode],start=2401.6)
-#@variable(nlp,v[1:nnode])
-#for i = 1:nnode
-#  if i==33
-#    set_start_value.(v[i], 66395.3)
-#  elseif i==34
-#    set_start_value.(v[i], 66395.3)
-#  elseif i==35
-#    set_start_value.(v[i], 66395.3)
-#  else
-#    set_start_value.(v[i], 2401.6)
-#  end
-#end
+@variable(nlp,v[1:nnode])
+for i = 1:nnode
+  if i>=33 && i<=35
+    set_start_value.(v[i], 66395.3)
+  elseif i>=39 && i<=41
+    set_start_value.(v[i], 277.13)
+  else
+    set_start_value.(v[i], 2401.6)
+  end
+end
 
 #@variable(nlp,T[1:nnode],start=0.0)
-#@variable(nlp,T[1:nnode])
-#for i = 1:nnode
-#  node = nodeidx_nodename_map[i]
-#  if endswith(node, ".1")
-#    set_start_value.(T[i], 0.0)
-#  elseif endswith(node, ".2")
-#    set_start_value.(T[i], deg2rad(-120.0))
-#  else
-#    set_start_value.(T[i], deg2rad(120.0))
-#  end
-#end
-
-@variable(nlp,v[1:nnode])
-set_start_value.(v, v_target_solution)
 @variable(nlp,T[1:nnode])
-set_start_value.(T, T_target_solution)
+#@variable(nlp,-pi <= T[1:nnode] <= pi)
+for i = 1:nnode
+  node = nodeidx_nodename_map[i]
+  if node == "SOURCEBUS.1"
+    set_start_value.(T[i], deg2rad(30.0))
+  elseif node == "SOURCEBUS.2"
+    set_start_value.(T[i], deg2rad(-90.0))
+  elseif node == "SOURCEBUS.3"
+    set_start_value.(T[i], deg2rad(150.0))
+  elseif endswith(node, ".1")
+    set_start_value.(T[i], 0.0)
+  elseif endswith(node, ".2")
+    set_start_value.(T[i], deg2rad(-120.0))
+  else
+    set_start_value.(T[i], deg2rad(120.0))
+  end
+end
+
+#@variable(nlp,v[1:nnode])
+#set_start_value.(v, v_target_solution)
+#@variable(nlp,T[1:nnode])
+#set_start_value.(T, T_target_solution)
 
 @NLexpression(nlp, vzi[i=1:nmeas], v[measidx_nodeidx_map[i]])
 
@@ -201,9 +207,13 @@ for row in CSV.File("test/measurement_data.csv")
   println("\nT target solution difference:  $(T_diff_solution)")
   println("\nT maximum solution difference:  $(findmax(T_diff_solution))")
 
-  println("\nAndy special: v target vs. solution side-by-side and diff...")
+  println("\nAndy special: expected target vs. solution side-by-side and diff...")
   for i = 1:nnode
-    println("$(nodeidx_nodename_map[i]) trgt: $(v_target_solution[i]), soln: $(value.(v[i])), diff: $(abs(v_target_solution[i]-value.(v[i])))")
+    println("$(nodeidx_nodename_map[i]) v exp: $(v_target_solution[i]), sol: $(value.(v[i])), diff: $(abs(v_target_solution[i]-value.(v[i])))")
+  end
+  println("")
+  for i = 1:nnode
+    println("$(nodeidx_nodename_map[i]) T exp: $(T_target_solution[i]), sol: $(value.(T[i])), diff: $(abs(T_target_solution[i]-value.(T[i])))")
   end
 end
 
