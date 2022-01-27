@@ -244,7 +244,7 @@ end
     #  println("\nh_$(zidx)(x*): $(hi)")
 
       hi_exp = h_Pi(target_solution,zidx)
-      println("h_Pi_$(zidx)(x_exp): $(hi_exp), measurement: $(zvec[zidx])")
+      println("h_Pi_$(zidx)(x_exp): $(hi_exp), measurement: $(zvec[zidx]), diff: $(abs(hi_exp-zvec[zidx]))")
 
       #for j in keys(Ybus[zidx_nodeidx_map[zidx]])
       #  branchP = vzi(target_solution,zidx) * vj(target_solution,j)*(Gzij(zidx,j)*cos(Tzij(target_solution,zidx,j)) + Bzij(zidx,j)*sin(Tzij(target_solution,zidx,j)))
@@ -255,17 +255,17 @@ end
 
     for zidx in Qi_zidxs
       hi_exp = h_Qi(target_solution,zidx)
-      println("h_Qi_$(zidx)(x_exp): $(hi_exp), measurement: $(zvec[zidx])")
+      println("h_Qi_$(zidx)(x_exp): $(hi_exp), measurement: $(zvec[zidx]), diff: $(abs(hi_exp-zvec[zidx]))")
     end
 
     for zidx in vi_zidxs
       hi_exp = vzi(target_solution,zidx)
-      println("vzi_$(zidx)(x_exp): $(hi_exp), measurement: $(zvec[zidx])")
+      println("vzi_$(zidx)(x_exp): $(hi_exp), measurement: $(zvec[zidx]), diff: $(abs(hi_exp-zvec[zidx]))")
     end
 
     for zidx in Ti_zidxs
       hi_exp = Tzi(target_solution,zidx)
-      println("Tzi_$(zidx)(x_exp): $(hi_exp), measurement: $(zvec[zidx])")
+      println("Tzi_$(zidx)(x_exp): $(hi_exp), measurement: $(zvec[zidx]), diff: $(abs(hi_exp-zvec[zidx]))")
     end
   end
 #end
