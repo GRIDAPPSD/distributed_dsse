@@ -108,30 +108,24 @@ v_target_solution = [2283.0834341589052201,2372.3754031263556499,2294.3624201193
 T_target_solution = [-0.0487008581519078,-2.1110176173411861,2.0538786105973394,-0.0487212231106527,-2.1110183324034084,2.0538614270470061,-2.1089698863920869,2.0717849099347547,-2.1096690990054103,2.0722047197955713,-0.0487015503792061,2.0523279899930449,-0.0233251756205417,-2.1072557600226691,2.0715461941386337,-0.0316480734366957,-2.1084606908889381,2.0649449934416371,-0.0483711665236682,-0.0000521372337437,-2.0944418330827110,2.0943289314156139,-0.0500893376253135,-2.1118074287584010,2.0547562138638016,2.0503481067922014,-0.0239046059606650,-2.1076067335546274,2.0713291512159540,-0.0487008796533500,-2.1110176441267274,2.0538785857932265,0.5235987755982987,-1.5707963267948968,2.6179938779914944,-0.0000273642134291,-2.0944166946151137,2.0943655274575939,-0.0303208337814400,-2.1119850227417052,2.0668226042254458]
 
 #@variable(nlp,v[1:nnode],start=66395.3)
-@variable(nlp,v[1:nnode])
-for i = 1:nnode
-  if i>=33 && i<=35
-    set_start_value.(v[i], 66395.3)
-  elseif i>=39 && i<=41
-    set_start_value.(v[i], 277.13)
-  else
-    set_start_value.(v[i], 2401.6)
-  end
-end
+@variable(nlp,v[1:nnode],start=2401.6)
+#@variable(nlp,v[1:nnode])
+#for i = 1:nnode
+#  if i>=33 && i<=35
+#    set_start_value.(v[i], 66395.3)
+#  elseif i>=39 && i<=41
+#    set_start_value.(v[i], 277.13)
+#  else
+#    set_start_value.(v[i], 2401.6)
+#  end
+#end
 
 #@variable(nlp,T[1:nnode],start=0.0)
 #@variable(nlp,-pi <= T[1:nnode] <= pi)
 @variable(nlp,T[1:nnode])
 for i = 1:nnode
   node = nodeidx_nodename_map[i]
-  if node == "SOURCEBUS.1"
-    set_start_value.(T[i], deg2rad(30.0))
-  elseif node == "SOURCEBUS.2"
-    set_start_value.(T[i], deg2rad(-90.0))
-  elseif node == "SOURCEBUS.3"
-    set_start_value.(T[i], deg2rad(150.0))
-  elseif endswith(node, ".1")
-  #if endswith(node, ".1")
+  if endswith(node, ".1")
     set_start_value.(T[i], 0.0)
     #set_start_value.(T[i], deg2rad(30.0))
     #@NLconstraint(nlp, T[i] >= deg2rad(30.0-90.0))
@@ -149,7 +143,14 @@ for i = 1:nnode
   end
 end
 
+set_start_value.(v[33], 66395.3)
+set_start_value.(v[34], 66395.3)
+set_start_value.(v[35], 66395.3)
 @NLconstraint(nlp, [i=33:35], v[i] == 66395.3)
+
+set_start_value.(T[33], deg2rad(30.0))
+set_start_value.(T[34], deg2rad(-90.0))
+set_start_value.(T[35], deg2rad(150.0))
 @NLconstraint(nlp, T[33] == deg2rad(30.0))
 @NLconstraint(nlp, T[34] == deg2rad(-90.0))
 @NLconstraint(nlp, T[35] == deg2rad(150.0))
