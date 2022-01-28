@@ -126,18 +126,18 @@ T_target_solution = [-0.0487008581519078,-2.1110176173411861,2.0538786105973394,
 for i = 1:nnode
   node = nodeidx_nodename_map[i]
   if endswith(node, ".1")
-    set_start_value.(T[i], 0.0)
-    #set_start_value.(T[i], deg2rad(30.0))
+    #set_start_value.(T[i], 0.0)
+    set_start_value.(T[i], deg2rad(30.0))
     #@NLconstraint(nlp, T[i] >= deg2rad(30.0-90.0))
     #@NLconstraint(nlp, T[i] <= deg2rad(30.0+90.0))
   elseif endswith(node, ".2")
-    set_start_value.(T[i], deg2rad(-120.0))
-    #set_start_value.(T[i], deg2rad(-90.0))
+    #set_start_value.(T[i], deg2rad(-120.0))
+    set_start_value.(T[i], deg2rad(-90.0))
     #@NLconstraint(nlp, T[i] >= deg2rad(-90.0-90.0))
     #@NLconstraint(nlp, T[i] <= deg2rad(-90.0+90.0))
   else
-    set_start_value.(T[i], deg2rad(120.0))
-    #set_start_value.(T[i], deg2rad(150.0))
+    #set_start_value.(T[i], deg2rad(120.0))
+    set_start_value.(T[i], deg2rad(150.0))
     #@NLconstraint(nlp, T[i] >= deg2rad(150.0-90.0))
     #@NLconstraint(nlp, T[i] <= deg2rad(150.0+90.0))
   end
