@@ -86,13 +86,9 @@ end
 
 # Main
 
-#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"max_iter"=>80))
-#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1, "max_iter"=>10000))
-#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1,"max_iter"=>10000))
-#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-1,"max_iter"=>10000))
-#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-9,"max_iter"=>10000))
-nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10))
-#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-14,"acceptable_tol"=>1e-14,"max_iter"=>100000))
+#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-14,"acceptable_tol"=>1e-14,"max_iter"=>100000)) # force a whole lot of iterations
+#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-9,"linear_solver"=>"mumps")) # fast optimization with decent accuracy
+nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10,"max_iter"=>10000,"linear_solver"=>"mumps"))
 
 println("Start parsing files...")
 
@@ -107,46 +103,65 @@ println("Done parsing files, start defining optimization problem...")
 v_target_solution = [2283.0834341589052201,2372.3754031263556499,2294.3624201193733825,2282.8985641419048989,2372.3484716871507771,2294.2190783191026640,2363.2752997397833497,2339.3809287173489793,2361.2315564450464080,2336.8924815796344774,2280.4987463440056672,2293.2337589443063735,2336.1909734539181045,2374.6161345817708934,2341.6688920407827936,2318.8179479999921568,2372.7592114495701026,2324.3778369779993227,2273.0063120857521426,2401.4131985750614149,2401.5134749777644174,2401.4247885560480427,2273.3742005452431840,2373.6699522389599224,2290.0518874935391977,2292.1405804143196292,2331.8752568378727119,2372.3604465902581069,2338.7013584566648206,2283.0836188232692621,2372.3755788026765003,2294.3625947736331909,66395.3000000000174623,66395.2999999999883585,66395.2999999999883585,2401.7203456675565576,2401.7385699396149903,2401.7264235380616810,265.5451524017101974,271.0012011180325544,267.0795161521803038]
 T_target_solution = [-0.0487008581519078,-2.1110176173411861,2.0538786105973394,-0.0487212231106527,-2.1110183324034084,2.0538614270470061,-2.1089698863920869,2.0717849099347547,-2.1096690990054103,2.0722047197955713,-0.0487015503792061,2.0523279899930449,-0.0233251756205417,-2.1072557600226691,2.0715461941386337,-0.0316480734366957,-2.1084606908889381,2.0649449934416371,-0.0483711665236682,-0.0000521372337437,-2.0944418330827110,2.0943289314156139,-0.0500893376253135,-2.1118074287584010,2.0547562138638016,2.0503481067922014,-0.0239046059606650,-2.1076067335546274,2.0713291512159540,-0.0487008796533500,-2.1110176441267274,2.0538785857932265,0.5235987755982987,-1.5707963267948968,2.6179938779914944,-0.0000273642134291,-2.0944166946151137,2.0943655274575939,-0.0303208337814400,-2.1119850227417052,2.0668226042254458]
 
+# After investigating what is needed for starting values and constraints,
+# the conclusion is that if we can limit the model problem to feeders where
+# the substation transformer isn't included, we should be able to avoid
+# topological analysis.  But, for the general case we assume we'll have/need
+# all nominal voltages and that is how it is coded below for the prototype.
+
+# For magnitudes, although we produce as good of a solution without knowing
+# all the nominal voltages and just some of them, having to know any of them
+# means we might as well utilize all of them to give the best shot at
+# finding the correct solution for any model
+
 #@variable(nlp,v[1:nnode],start=66395.3)
 @variable(nlp,v[1:nnode],start=2401.6)
 #@variable(nlp,v[1:nnode])
-#for i = 1:nnode
-#  if i>=33 && i<=35
-#    set_start_value.(v[i], 66395.3)
-#  elseif i>=39 && i<=41
-#    set_start_value.(v[i], 277.13)
-#  else
-#    set_start_value.(v[i], 2401.6)
-#  end
-#end
-
-#@variable(nlp,T[1:nnode],start=0.0)
-#@variable(nlp,-pi <= T[1:nnode] <= pi)
-@variable(nlp,T[1:nnode])
 for i = 1:nnode
-  node = nodeidx_nodename_map[i]
-  if endswith(node, ".1")
-    #set_start_value.(T[i], 0.0)
-    set_start_value.(T[i], deg2rad(30.0))
-    #@NLconstraint(nlp, T[i] >= deg2rad(30.0-90.0))
-    #@NLconstraint(nlp, T[i] <= deg2rad(30.0+90.0))
-  elseif endswith(node, ".2")
-    #set_start_value.(T[i], deg2rad(-120.0))
-    set_start_value.(T[i], deg2rad(-90.0))
-    #@NLconstraint(nlp, T[i] >= deg2rad(-90.0-90.0))
-    #@NLconstraint(nlp, T[i] <= deg2rad(-90.0+90.0))
+  if i>=33 && i<=35
+    set_start_value.(v[i], 66395.3)
+  elseif i>=39 && i<=41
+    set_start_value.(v[i], 277.13)
   else
-    #set_start_value.(T[i], deg2rad(120.0))
-    set_start_value.(T[i], deg2rad(150.0))
-    #@NLconstraint(nlp, T[i] >= deg2rad(150.0-90.0))
-    #@NLconstraint(nlp, T[i] <= deg2rad(150.0+90.0))
+    set_start_value.(v[i], 2401.6)
   end
 end
 
-set_start_value.(v[33], 66395.3)
-set_start_value.(v[34], 66395.3)
-set_start_value.(v[35], 66395.3)
+#set_start_value.(v[33:35], 66395.3)
+# Need equality constrainst for source bus voltages
 @NLconstraint(nlp, [i=33:35], v[i] == 66395.3)
+
+# Similar to magnitudes, for angles if we need the nominal values at all,
+# we should really use all of them to give us the best shot at finding the
+# correct solution for any model
+
+#@variable(nlp,T[1:nnode],start=0.0)
+#@variable(nlp,-pi <= T[1:nnode] <= pi,start=0.0)
+@variable(nlp,T[1:nnode])
+for i = 1:nnode
+  node = nodeidx_nodename_map[i]
+  if i>=33 && i<=35 # let the code below handle source bus terms
+  #if endswith(node, ".1")
+  elseif endswith(node, ".1")
+    start = 0.0
+    #start = 30.0
+    set_start_value.(T[i], deg2rad(start))
+    #@NLconstraint(nlp, T[i] >= deg2rad(start-90.0))
+    #@NLconstraint(nlp, T[i] <= deg2rad(start+90.0))
+  elseif endswith(node, ".2")
+    start = -120.0
+    #start = -90.0
+    set_start_value.(T[i], deg2rad(start))
+    #@NLconstraint(nlp, T[i] >= deg2rad(start-90.0))
+    #@NLconstraint(nlp, T[i] <= deg2rad(start+90.0))
+  else
+    start = 120.0
+    #start = 150.0
+    set_start_value.(T[i], deg2rad(start))
+    #@NLconstraint(nlp, T[i] >= deg2rad(start-90.0))
+    #@NLconstraint(nlp, T[i] <= deg2rad(start+90.0))
+  end
+end
 
 set_start_value.(T[33], deg2rad(30.0))
 set_start_value.(T[34], deg2rad(-90.0))
@@ -155,6 +170,7 @@ set_start_value.(T[35], deg2rad(150.0))
 @NLconstraint(nlp, T[34] == deg2rad(-90.0))
 @NLconstraint(nlp, T[35] == deg2rad(150.0))
 
+# Hack to set the starting values to the target solution
 #@variable(nlp,v[1:nnode])
 #set_start_value.(v, v_target_solution)
 #@variable(nlp,T[1:nnode])
