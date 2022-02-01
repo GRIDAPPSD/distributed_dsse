@@ -135,6 +135,12 @@ end
 # we should really use all of them to give us the best shot at finding the
 # correct solution for any model
 
+# For some reason we haven't figured out yet, adding the plus/minus 90
+# degree constraints to the angle values will cause Julia to crash if the
+# convergence tolerance is buckled down so it doesn't quickly "solve" it
+# with lesser accuracy.  For now, we'll just go without the angle constraints
+# and see if it becomes an issue when applying this beyond the test problem.
+
 #@variable(nlp,T[1:nnode],start=0.0)
 #@variable(nlp,-pi <= T[1:nnode] <= pi,start=0.0)
 @variable(nlp,T[1:nnode])
