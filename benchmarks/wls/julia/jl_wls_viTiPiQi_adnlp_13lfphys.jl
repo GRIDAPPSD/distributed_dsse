@@ -210,7 +210,8 @@ end
     #stats = ipopt(nlp, tol=1e-12, acceptable_tol=1e-10)
     #@time stats = ipopt(nlp)
     #@time stats = ipopt(nlp, tol=1e-2, acceptable_tol=1e-1, max_iter=1000)
-    @time stats = ipopt(nlp, tol=1e-1, max_iter=500)
+    #@time stats = ipopt(nlp, tol=1e-1, max_iter=500)
+    @time stats = ipopt(nlp, tol=1e-14, acceptable_tol=1e-14, max_iter=2000)
     #@time stats = ipopt(nlp, tol=1e-2, max_iter=500) # struggles even starting at solution
     print(stats)
     println("\nFull solution:  $(stats.solution)")
