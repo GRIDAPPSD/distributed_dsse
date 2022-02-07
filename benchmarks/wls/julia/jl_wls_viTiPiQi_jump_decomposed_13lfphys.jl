@@ -115,8 +115,6 @@ T_target_solution = [-0.0487008581519078,-2.1110176173411861,2.0538786105973394,
 # means we might as well utilize all of them to give the best shot at
 # finding the correct solution for any model
 
-#@variable(nlp,v[1:nnode],start=66395.3)
-#@variable(nlp,v[1:nnode],start=2401.6)
 @variable(nlp,v[1:nnode])
 for i = 1:nnode
   if i>=33 && i<=35
@@ -128,7 +126,6 @@ for i = 1:nnode
   end
 end
 
-#set_start_value.(v[33:35], 66395.3)
 # Need equality constrainst for source bus voltages
 @NLconstraint(nlp, [i=33:35], v[i] == 66395.3)
 
@@ -142,8 +139,6 @@ end
 # with lesser accuracy.  For now, we'll just go without the angle constraints
 # and see if it becomes an issue when applying this beyond the test problem.
 
-#@variable(nlp,T[1:nnode],start=0.0)
-#@variable(nlp,-pi <= T[1:nnode] <= pi,start=0.0)
 @variable(nlp,T[1:nnode])
 for i = 1:nnode
   node = nodeidx_nodename_map[i]
