@@ -88,6 +88,7 @@ end
 
 #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-14,"acceptable_tol"=>1e-14,"max_iter"=>100000)) # force a whole lot of iterations
 #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-9,"linear_solver"=>"mumps")) # fast optimization with decent accuracy
+#nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10,"max_iter"=>10000,"linear_solver"=>"ma27"))
 nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10,"max_iter"=>10000,"linear_solver"=>"mumps"))
 
 println("Start parsing files...")
@@ -115,8 +116,8 @@ T_target_solution = [-0.0487008581519078,-2.1110176173411861,2.0538786105973394,
 # finding the correct solution for any model
 
 #@variable(nlp,v[1:nnode],start=66395.3)
-@variable(nlp,v[1:nnode],start=2401.6)
-#@variable(nlp,v[1:nnode])
+#@variable(nlp,v[1:nnode],start=2401.6)
+@variable(nlp,v[1:nnode])
 for i = 1:nnode
   if i>=33 && i<=35
     set_start_value.(v[i], 66395.3)
@@ -147,23 +148,28 @@ end
 for i = 1:nnode
   node = nodeidx_nodename_map[i]
   if i>=33 && i<=35 # let the code below handle source bus terms
-  #if endswith(node, ".1")
   elseif endswith(node, ".1")
     start = 0.0
-    #start = 30.0
     set_start_value.(T[i], deg2rad(start))
+    @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
+    # Keep both constraints in a single expression as above.  If they are
+    # broken up as in the commented code below, JuMP will likely crash!
     #@NLconstraint(nlp, T[i] >= deg2rad(start-90.0))
     #@NLconstraint(nlp, T[i] <= deg2rad(start+90.0))
   elseif endswith(node, ".2")
     start = -120.0
-    #start = -90.0
     set_start_value.(T[i], deg2rad(start))
+    @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
+    # Keep both constraints in a single expression as above.  If they are
+    # broken up as in the commented code below, JuMP will likely crash!
     #@NLconstraint(nlp, T[i] >= deg2rad(start-90.0))
     #@NLconstraint(nlp, T[i] <= deg2rad(start+90.0))
   else
     start = 120.0
-    #start = 150.0
     set_start_value.(T[i], deg2rad(start))
+    @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
+    # Keep both constraints in a single expression as above.  If they are
+    # broken up as in the commented code below, JuMP will likely crash!
     #@NLconstraint(nlp, T[i] >= deg2rad(start-90.0))
     #@NLconstraint(nlp, T[i] <= deg2rad(start+90.0))
   end
@@ -249,7 +255,7 @@ for row in CSV.File("test/measurement_data.csv")
   end
   println("")
   for i = 1:nnode
-    println("$(nodeidx_nodename_map[i]) T exp: $(T_target_solution[i]), sol: $(value.(T[i])), diff: $(abs(T_target_solution[i]-value.(T[i])))")
+    println("$(nodeidx_nodename_map[i]) T exp: $(rad2deg(T_target_solution[i])), sol: $(rad2deg(value.(T[i]))), diff: $(abs(T_target_solution[i]-value.(T[i])))")
   end
 end
 
