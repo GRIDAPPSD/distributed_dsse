@@ -54,20 +54,26 @@ function get_input()
   println("    measurement node index map: $(measidx_nodeidx_map)")
 
   Ybus = Dict()
+  ibus = 0
   for row in CSV.File("test/ysparse.csv")
     if !haskey(Ybus, row[1])
       Ybus[row[1]] = Dict()
     end
     # must construct full Ybus, not just lower diagonal elements
     Ybus[row[1]][row[2]] = Ybus[row[2]][row[1]] = complex(row[3], row[4])
+    ibus += 1
   end
+  println("    Ybus number of lower diagonal elements: $(ibus)")
 
   Vnom = Dict()
+  inom = 0
   for row in CSV.File("test/vnom.csv")
     if row[1] in keys(nodename_nodeidx_map)
       Vnom[nodename_nodeidx_map[row[1]]] = (row[2], row[3])
+      inom += 1
     end
   end
+  println("    Vnom number of elements: $(inom)")
 
   Source = Vector{Int64}()
   for row in CSV.File("test/sourcebus.csv", header=false)
@@ -75,28 +81,29 @@ function get_input()
       append!(Source, nodename_nodeidx_map[row[1]])
     end
   end
-  println(Source)
+  println("    source bus indices: $(Source)")
 
   measdata = CSV.File("test/measurement_data.csv")
 
-  return Ybus, Vnom, Source, rmat, measidxs, measidx_nodeidx_map, measdata
+  return measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata
 end
 
 
-# Schedule meeting with Fernando for Tuesday 2/8 to show the estimate function
-# to start the thinking on how to organize the overall distributed SE
-# methodology in terms of agents
-
 # Input:
-#  - Ybus
-#  - Nominal voltage magnitudes and angles per node, Vnom
-#  - Source bus nodes, Source
-#  - R covariance matrix, rmat
-#  - Measurement indices for each type of measurement (vi, Ti, Pi, Qi), measidxs
-#  - Measurement index number to node index number map, measidx_nodeidx_map
-#  - Streaming measurement data, measdata, used to populate zvec
+#  - measidxs: Measurement indices for each type of measurement (vi,Ti,Pi,Qi),
+#    dictionary indexed by measurement type with value as vector of measurement
+#    indices for the given type
+#  - measidx_nodeidx_map: Measurement index number to node index number map
+#  - rmat: R measurement covariance matrix, diagonal terms only, square of
+#  - Ybus: sparse admittance matrix, 2-dimensional complex value dictionary
+#    indexed by node numbers with both lower and upper diagonal values populated
+#  - Vnom: nominal voltages, dictionary indexed by node numbers with each
+#    element as a tuple with magnitude first and angle (degrees) second
+#  - Source: source bus node indices as a vector
+#    standard deviation of error of corresponding measurement
+#  - measdata: streaming measurement data for populating zvec
 
-function setup_estimate(Ybus, Vnom, Source, rmat, measidxs, measidx_nodeidx_map)
+function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-14,"acceptable_tol"=>1e-14,"max_iter"=>100000)) # force a whole lot of iterations
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-9,"linear_solver"=>"mumps")) # fast optimization with decent accuracy
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10,"max_iter"=>10000,"linear_solver"=>"ma27"))
@@ -227,11 +234,11 @@ end
 
 println("Start parsing input files...")
 
-Ybus, Vnom, Source, rmat, measidxs, measidx_nodeidx_map, measdata = get_input()
+measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input()
 
 println("Done parsing input files, start defining optimization problem...")
 
-nlp, zvec, v, T = setup_estimate(Ybus, Vnom, Source, rmat, measidxs, measidx_nodeidx_map)
+nlp, zvec, v, T = setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
 
 println("Done with defining optimization problem, start solving it...")
 
