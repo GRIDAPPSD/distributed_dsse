@@ -94,7 +94,7 @@ end
 #  - R covariance matrix, rmat
 #  - Measurement indices for each type of measurement (vi, Ti, Pi, Qi), measidxs
 #  - Measurement index number to node index number map, measidx_nodeidx_map
-#  - Streaming measurement data, measdata
+#  - Streaming measurement data, measdata, used to populate zvec
 
 function setup_estimate(Ybus, Vnom, Source, rmat, measidxs, measidx_nodeidx_map)
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-14,"acceptable_tol"=>1e-14,"max_iter"=>100000)) # force a whole lot of iterations
@@ -152,29 +152,48 @@ function setup_estimate(Ybus, Vnom, Source, rmat, measidxs, measidx_nodeidx_map)
   end
 
   # Objective function formulation
-  # vi measurements
   @NLexpression(nlp, vzi[i=1:nmeas], v[measidx_nodeidx_map[i]])
 
-  @NLexpression(nlp, Visum, sum((zvec[i] - vzi[i])^2/rmat[i] for i in measidxs["vi"]))
+  # vi measurements
+  if "vi" in keys(measidxs)
+    @NLexpression(nlp, Visum, sum((zvec[i] - vzi[i])^2/rmat[i] for i in measidxs["vi"]))
+  else
+    @NLexpression(nlp, Visum, 0.0)
+  end
 
-  # Ti measurements
   @NLexpression(nlp, Tzi[i=1:nmeas], T[measidx_nodeidx_map[i]])
 
-  @NLexpression(nlp, Tisum, sum((zvec[i] - Tzi[i])^2/rmat[i] for i in measidxs["Ti"]))
+  # Ti measurements
+  if "Ti" in keys(measidxs)
+    @NLexpression(nlp, Tisum, sum((zvec[i] - Tzi[i])^2/rmat[i] for i in measidxs["Ti"]))
+  else
+    @NLexpression(nlp, Tisum, 0.0)
+  end
 
   # common terms for Pi and Qi measurements
-  @NLexpression(nlp, Tzij[i=1:nmeas,j in keys(Ybus[measidx_nodeidx_map[i]])], Tzi[i] - T[j])
-  @NLexpression(nlp, Gzij[i=1:nmeas,j in keys(Ybus[measidx_nodeidx_map[i]])], real.(Ybus[measidx_nodeidx_map[i]][j]))
-  @NLexpression(nlp, Bzij[i=1:nmeas,j in keys(Ybus[measidx_nodeidx_map[i]])], imag.(Ybus[measidx_nodeidx_map[i]][j]))
+  if "Pi" in keys(measidxs) || "Qi" in keys(measidxs)
+    @NLexpression(nlp, Tzij[i=1:nmeas,j in keys(Ybus[measidx_nodeidx_map[i]])], Tzi[i] - T[j])
+    @NLexpression(nlp, Gzij[i=1:nmeas,j in keys(Ybus[measidx_nodeidx_map[i]])], real.(Ybus[measidx_nodeidx_map[i]][j]))
+    @NLexpression(nlp, Bzij[i=1:nmeas,j in keys(Ybus[measidx_nodeidx_map[i]])], imag.(Ybus[measidx_nodeidx_map[i]][j]))
+  end
 
   # Pi measurements
-  @NLexpression(nlp, h_Pi[i in measidxs["Pi"]], vzi[i] * sum(v[j]*(Gzij[i,j]*cos(Tzij[i,j]) + Bzij[i,j]*sin(Tzij[i,j])) for j in keys(Ybus[measidx_nodeidx_map[i]]))) 
-  @NLexpression(nlp, Pisum, sum((zvec[i] - h_Pi[i])^2/rmat[i] for i in measidxs["Pi"]))
+  if "Pi" in keys(measidxs)
+    @NLexpression(nlp, h_Pi[i in measidxs["Pi"]], vzi[i] * sum(v[j]*(Gzij[i,j]*cos(Tzij[i,j]) + Bzij[i,j]*sin(Tzij[i,j])) for j in keys(Ybus[measidx_nodeidx_map[i]])))
+    @NLexpression(nlp, Pisum, sum((zvec[i] - h_Pi[i])^2/rmat[i] for i in measidxs["Pi"]))
+  else
+    @NLexpression(nlp, Pisum, 0.0)
+  end
 
   # Qi measurements
-  @NLexpression(nlp, h_Qi[i in measidxs["Qi"]], vzi[i] * sum(v[j]*(Gzij[i,j]*sin(Tzij[i,j]) - Bzij[i,j]*cos(Tzij[i,j])) for j in keys(Ybus[measidx_nodeidx_map[i]]))) 
-  @NLexpression(nlp, Qisum, sum((zvec[i] - h_Qi[i])^2/rmat[i] for i in measidxs["Qi"]))
+  if "Qi" in keys(measidxs)
+    @NLexpression(nlp, h_Qi[i in measidxs["Qi"]], vzi[i] * sum(v[j]*(Gzij[i,j]*sin(Tzij[i,j]) - Bzij[i,j]*cos(Tzij[i,j])) for j in keys(Ybus[measidx_nodeidx_map[i]])))
+    @NLexpression(nlp, Qisum, sum((zvec[i] - h_Qi[i])^2/rmat[i] for i in measidxs["Qi"]))
+  else
+    @NLexpression(nlp, Qisum, 0.0)
+  end
 
+  # final objective function is sum of components
   @NLobjective(nlp, Min, Visum + Tisum + Pisum + Qisum)
 
   return nlp, zvec, v, T
