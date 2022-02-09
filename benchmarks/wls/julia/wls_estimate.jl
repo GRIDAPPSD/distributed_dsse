@@ -95,12 +95,12 @@ end
 #    indices for the given type
 #  - measidx_nodeidx_map: Measurement index number to node index number map
 #  - rmat: R measurement covariance matrix, diagonal terms only, square of
+#    standard deviation of error of corresponding measurement
 #  - Ybus: sparse admittance matrix, 2-dimensional complex value dictionary
 #    indexed by node numbers with both lower and upper diagonal values populated
 #  - Vnom: nominal voltages, dictionary indexed by node numbers with each
 #    element as a tuple with magnitude first and angle (degrees) second
 #  - Source: source bus node indices as a vector
-#    standard deviation of error of corresponding measurement
 #  - measdata: streaming measurement data for populating zvec
 
 function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
@@ -207,26 +207,24 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
 end
 
 
-function estimate(nlp, zvec, v, T, measdata)
-  # process measurement data for each timestep, calling solver
+function estimate(nlp, zvec, v, T, measurement)
+  # populate zvec with measurement data for given timestep and call solver
 
-  for measurement in measdata
-    println("\n================================================================================\n")
-    # This logic assumes that the order of measurement data (columns in a row)
-    # is the same as measurement order (rows) in measurements.csv
-    # If that's not the case, then this will require some fanciness with
-    # dictionaries to assign zvec values to the appropriate index
-    nmeas = length(measurement) - 1
-    for imeas in 1:nmeas
-      set_value(zvec[imeas], measurement[imeas+1])
-    end
-    println("*** Timestamp with measurements: $(measurement)\n")
-
-    @time optimize!(nlp)
-    solution_summary(nlp, verbose=true)
-    println("v = $(value.(v))")
-    println("T = $(value.(T))")
+  println("\n================================================================================\n")
+  # This logic assumes that the order of measurement data (columns in a row)
+  # is the same as measurement order (rows) in measurements.csv
+  # If that's not the case, then this will require some fanciness with
+  # dictionaries to assign zvec values to the appropriate index
+  nmeas = length(measurement) - 1
+  for imeas in 1:nmeas
+    set_value(zvec[imeas], measurement[imeas+1])
   end
+  println("*** Timestamp with measurements: $(measurement)\n")
+
+  @time optimize!(nlp)
+  solution_summary(nlp, verbose=true)
+  println("v = $(value.(v))")
+  println("T = $(value.(T))")
 end
 
 
@@ -242,5 +240,7 @@ nlp, zvec, v, T = setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom
 
 println("Done with defining optimization problem, start solving it...")
 
-estimate(nlp, zvec, v, T, measdata)
+for measurement in measdata
+  estimate(nlp, zvec, v, T, measurement)
+end
 
