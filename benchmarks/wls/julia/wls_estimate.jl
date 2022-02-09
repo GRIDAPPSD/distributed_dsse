@@ -53,7 +53,14 @@ function get_input()
 
   println("    measurement node index map: $(measidx_nodeidx_map)")
 
+  # TODO: objective function works on dictionaries rather than potentially faster
+  # Julia SparseArray data types. Commented out code below populates YbusG and YbusB
+  # SparseArrays.  Tried to plug this into objective function using the nzrange()
+  # function in place of keys() for a dictionary, but gave an out of bounds array access
+  # error so went back to dictionary
   Ybus = Dict()
+  #YbusG = spzeros(Float64, inode, inode)
+  #YbusB = spzeros(Float64, inode, inode)
   ibus = 0
   for row in CSV.File("test/ysparse.csv")
     if !haskey(Ybus, row[1])
@@ -61,6 +68,8 @@ function get_input()
     end
     # must construct full Ybus, not just lower diagonal elements
     Ybus[row[1]][row[2]] = Ybus[row[2]][row[1]] = complex(row[3], row[4])
+    #YbusG[row[1],row[2]] = YbusG[row[2],row[1]] = row[3]
+    #YbusB[row[1],row[2]] = YbusB[row[2],row[1]] = row[4]
     ibus += 1
   end
   println("    Ybus number of lower diagonal elements: $(ibus)")
