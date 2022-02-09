@@ -108,7 +108,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-9,"linear_solver"=>"mumps")) # fast optimization with decent accuracy
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10,"max_iter"=>10000,"linear_solver"=>"ma27"))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10,"max_iter"=>10000,"linear_solver"=>"mumps"))
-  nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-8,"max_iter"=>5000,"linear_solver"=>"mumps"))
+  nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>5000,"linear_solver"=>"mumps"))
 
   nnode = length(Vnom) # get number of nodes from # of Vnom elements
   nmeas = length(rmat) # get number of measurements from # of rmat elements
