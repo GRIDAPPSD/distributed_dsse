@@ -53,11 +53,11 @@ function get_input()
 
   println("    measurement node index map: $(measidx_nodeidx_map)")
 
-  # TODO: objective function works on dictionaries rather than potentially faster
-  # Julia SparseArray data types. Commented out code below populates YbusG and YbusB
-  # SparseArrays.  Tried to plug this into objective function using the nzrange()
-  # function in place of keys() for a dictionary, but gave an out of bounds array access
-  # error so went back to dictionary
+  # TODO: objective function works on dictionaries rather than potentially
+  # faster Julia SparseArray data types. Commented out code below populates
+  # YbusG and YbusB SparseArrays.  Tried to plug this into objective function
+  # using the nzrange() function in place of keys() for a dictionary, but gave
+  # an out of bounds array access error so went back to dictionary
   Ybus = Dict()
   #YbusG = spzeros(Float64, inode, inode)
   #YbusB = spzeros(Float64, inode, inode)
