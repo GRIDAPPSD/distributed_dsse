@@ -6,6 +6,7 @@ using SparseArrays
 
 
 function get_input(zonenum)
+  println("    Reading input files for zone: $(zonenum)")
   nodename_nodeidx_map = Dict()
 
   inode = 0
@@ -51,7 +52,7 @@ function get_input(zonenum)
     println("    Qi measurement indices: $(measidxs["Qi"])")
   end
 
-  println("    measurement node index map: $(measidx_nodeidx_map)")
+  println("    Measurement node index map: $(measidx_nodeidx_map)")
 
   # TODO: objective function works on dictionaries rather than potentially
   # faster Julia SparseArray data types. Commented out code below populates
@@ -90,7 +91,7 @@ function get_input(zonenum)
       append!(Source, nodename_nodeidx_map[row[1]])
     end
   end
-  println("    source bus indices: $(Source)")
+  println("    Source bus indices: $(Source)\n")
 
   measdata = CSV.File(string("mase_files/measurement_data.csv.", zonenum))
 
@@ -238,6 +239,11 @@ end
 println("Start parsing input files...")
 
 measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(0)
+#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(1)
+#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(2)
+#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(3)
+#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(4)
+#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(5)
 
 println("Done parsing input files, start defining optimization problem...")
 
