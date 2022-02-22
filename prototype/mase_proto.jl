@@ -238,25 +238,39 @@ end
 
 println("Start parsing input files...")
 
-measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(0)
-#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(1)
-#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(2)
-#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(3)
-#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(4)
-#measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(5)
+measdixs = Dict()
+measidx_nodeidx_map = Dict()
+rmat = Dict()
+Ybus = Dict()
+Vnom = Dict()
+Source = Dict()
+measdata = Dict()
+
+for zone = 0:5
+  measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Vnom[zone], Source[zone], measdata[zone] = get_input(zone)
+end
 
 println("Done parsing input files, start defining optimization problem...")
 
-nlp, zvec, v, T = setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
+nlp = Dict()
+zvec = Dict()
+v = Dict()
+T = Dict()
 
-println("Done with defining optimization problem, start solving it...")
+for zone = 0:5
+  nlp[zone], zvec[zone], v[zone], T[zone] = setup_estimate(measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Vnom[zone], Source[zone])
+end
 
-iter = 0
-for measurement in measdata
-  global iter += 1
-  estimate(nlp, zvec, v, T, measurement)
-  if iter == 1
-    break # only estimate the first timestamp for now
+println("\nDone defining optimization problem, start solving it...")
+
+for zone = 0:5
+  iter = 0
+  for measurement in measdata[zone]
+    iter += 1
+    estimate(nlp[zone], zvec[zone], v[zone], T[zone], measurement)
+    if iter == 1
+      break # only estimate the first timestamp for now
+    end
   end
 end
 
