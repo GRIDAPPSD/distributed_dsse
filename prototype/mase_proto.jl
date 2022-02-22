@@ -263,14 +263,15 @@ end
 
 println("\nDone defining optimization problem, start solving it...")
 
-for zone = 0:5
-  iter = 0
-  for measurement in measdata[zone]
-    iter += 1
-    estimate(nlp[zone], zvec[zone], v[zone], T[zone], measurement)
-    if iter == 1
-      break # only estimate the first timestamp for now
-    end
+# assume all measurement_data files contain the same number of rows/timestamps
+nrows = length(measdata[0])
+println("number of timestamps to process: $(nrows)")
+
+for row = 1:1 # first timestamp only
+#for row = 1:nrows # all timestamps
+  for zone = 0:5
+    println("row: $(row), zone: $(zone)")
+    estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
   end
 end
 
