@@ -247,11 +247,16 @@ measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata = get_input(0)
 
 println("Done parsing input files, start defining optimization problem...")
 
-#nlp, zvec, v, T = setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
+nlp, zvec, v, T = setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
 
-#println("Done with defining optimization problem, start solving it...")
+println("Done with defining optimization problem, start solving it...")
 
-#for measurement in measdata
-#  estimate(nlp, zvec, v, T, measurement)
-#end
+iter = 0
+for measurement in measdata
+  global iter += 1
+  estimate(nlp, zvec, v, T, measurement)
+  if iter == 1
+    break # only estimate the first timestamp for now
+  end
+end
 
