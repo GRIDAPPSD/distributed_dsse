@@ -5,14 +5,18 @@ using CSV
 using SparseArrays
 
 
-function get_input(zonenum)
-  println("    Reading input files for zone: $(zonenum)")
+function get_input(zone, Shared)
+  println("    Reading input files for zone: $(zone)")
   nodename_nodeidx_map = Dict()
 
   inode = 0
-  for row in CSV.File(string("mase_files/nodelist.csv.", zonenum), header=false)
+  for row in CSV.File(string("mase_files/nodelist.csv.", zone), header=false)
     inode += 1
-    nodename_nodeidx_map[row[1]] = inode # this one is needed below
+    nodename_nodeidx_map[row[1]] = inode
+
+    if row[1] in keys(Shared)
+      push!(Shared[row[1]], (zone, inode))
+    end
   end
   println("    Total number of nodes: $(inode)")
 
@@ -21,7 +25,7 @@ function get_input(zonenum)
   rmat = Vector{Float64}()
 
   imeas = 0
-  for row in CSV.File(string("mase_files/measurements.csv.", zonenum))
+  for row in CSV.File(string("mase_files/measurements.csv.", zone))
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
     stype = row[1]
@@ -63,7 +67,7 @@ function get_input(zonenum)
   #YbusG = spzeros(Float64, inode, inode)
   #YbusB = spzeros(Float64, inode, inode)
   ibus = 0
-  for row in CSV.File(string("mase_files/ysparse.csv.", zonenum))
+  for row in CSV.File(string("mase_files/ysparse.csv.", zone))
     if !haskey(Ybus, row[1])
       Ybus[row[1]] = Dict()
     end
@@ -77,7 +81,7 @@ function get_input(zonenum)
 
   Vnom = Dict()
   inom = 0
-  for row in CSV.File(string("mase_files/vnom.csv.", zonenum))
+  for row in CSV.File(string("mase_files/vnom.csv.", zone))
     if row[1] in keys(nodename_nodeidx_map)
       Vnom[nodename_nodeidx_map[row[1]]] = (row[2], row[3])
       inom += 1
@@ -86,14 +90,14 @@ function get_input(zonenum)
   println("    Vnom number of elements: $(inom)")
 
   Source = Vector{Int64}()
-  for row in CSV.File(string("mase_files/sourcebus.csv.", zonenum), header=false)
+  for row in CSV.File(string("mase_files/sourcebus.csv.", zone), header=false)
     if row[1] in keys(nodename_nodeidx_map)
       append!(Source, nodename_nodeidx_map[row[1]])
     end
   end
   println("    Source bus indices: $(Source)\n")
 
-  measdata = CSV.File(string("mase_files/measurement_data.csv.", zonenum))
+  measdata = CSV.File(string("mase_files/measurement_data.csv.", zone))
 
   return measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata
 end
@@ -238,6 +242,11 @@ end
 
 println("Start parsing input files...")
 
+Shared = Dict()
+for row in CSV.File("mase_files/sharednodelist.csv", header=false)
+  Shared[row[1]] = []
+end
+
 measidxs = Dict()
 measidx_nodeidx_map = Dict()
 rmat = Dict()
@@ -247,8 +256,25 @@ Source = Dict()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Vnom[zone], Source[zone], measdata[zone] = get_input(zone)
+  measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Vnom[zone], Source[zone], measdata[zone] = get_input(zone, Shared)
 end
+
+Sharednodes = Dict()
+for (key, value) in Shared
+  zone = value[1][1]
+  if !haskey(Sharednodes, zone)
+    Sharednodes[zone] = Dict()
+  end
+  Sharednodes[zone][value[1][2]] = value[2]
+
+  zone = value[2][1]
+  if !haskey(Sharednodes, zone)
+    Sharednodes[zone] = Dict()
+  end
+  Sharednodes[zone][value[2][2]] = value[1]
+end
+#println("Shared dictionary: $(Shared)\n")
+#println("Sharednodes dictionary: $(Sharednodes)\n")
 
 println("Done parsing input files, start defining optimization problem...")
 
@@ -283,6 +309,13 @@ for row = 1:1 # first timestamp only
   end
 
   # exchange shared node values updating v/T starting values
+  for (zonedest, Zonenodes) in Sharednodes
+    for (nodedest, source) in Zonenodes
+      println("sharing destination zone: $(zonedest), node: $(nodedest), value: $(value.(v[zonedest][nodedest])), source zone: $(source[1]), node: $(source[2]), value: $(value.(v[source[1]][source[2]]))")
+      set_start_value.(v[zonedest][nodedest], value.(v[source[1]][source[2]]))
+      set_start_value.(T[zonedest][nodedest], value.(T[source[1]][source[2]]))
+    end
+  end
 
   # second optimization using shared node values
   for zone = 0:5
@@ -290,15 +323,9 @@ for row = 1:1 # first timestamp only
     estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
   end
 
-  # for the next timestamp, either update starting values with v/T solution
-  # from second optimization on the preceding timestamp or set them back to
-  # the Vnom values
-  # update starting values with v/T solution values from first optimization
-  #for zone = 0:5
-  #  set_start_value.(v[zone], value.(v[zone]))
-  #  set_start_value.(T[zone], value.(T[zone]))
-  #end
-  # reset starting values back to Vnom
+  # reset starting values back to Vnom so there is no "timestamp memory"
+  # no need to set constraints because those were never updated with
+  # shared node data exchange
   for zone = 0:5
     for i = 1:nnode
       if i in keys(Vnom[zone])
