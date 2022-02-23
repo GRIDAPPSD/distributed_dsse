@@ -238,7 +238,7 @@ end
 
 println("Start parsing input files...")
 
-measdixs = Dict()
+measidxs = Dict()
 measidx_nodeidx_map = Dict()
 rmat = Dict()
 Ybus = Dict()
@@ -266,12 +266,46 @@ println("\nDone defining optimization problem, start solving it...")
 # assume all measurement_data files contain the same number of rows/timestamps
 nrows = length(measdata[0])
 println("number of timestamps to process: $(nrows)")
+nnode = length(Vnom[0])
 
 for row = 1:1 # first timestamp only
 #for row = 1:nrows # all timestamps
+  # first optimization for each zone using vnom data for starting point
   for zone = 0:5
-    println("row: $(row), zone: $(zone)")
+    println("first estimate for row: $(row), zone: $(zone)")
     estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
+  end
+
+  # update starting values with v/T solution values from first optimization
+  for zone = 0:5
+    set_start_value.(v[zone], value.(v[zone]))
+    set_start_value.(T[zone], value.(T[zone]))
+  end
+
+  # exchange shared node values updating v/T starting values
+
+  # second optimization using shared node values
+  for zone = 0:5
+    println("second estimate for row: $(row), zone: $(zone)")
+    estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
+  end
+
+  # for the next timestamp, either update starting values with v/T solution
+  # from second optimization on the preceding timestamp or set them back to
+  # the Vnom values
+  # update starting values with v/T solution values from first optimization
+  #for zone = 0:5
+  #  set_start_value.(v[zone], value.(v[zone]))
+  #  set_start_value.(T[zone], value.(T[zone]))
+  #end
+  # reset starting values back to Vnom
+  for zone = 0:5
+    for i = 1:nnode
+      if i in keys(Vnom[zone])
+        set_start_value.(v[zone][i], Vnom[zone][i][1])
+        set_start_value.(T[zone][i], deg2rad(Vnom[zone][i][2]))
+      end
+    end
   end
 end
 
