@@ -118,7 +118,8 @@ end
 #  - measdata: streaming measurement data for populating zvec
 
 function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
-  nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>5000,"linear_solver"=>"mumps"))
+  #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>5000,"linear_solver"=>"mumps"))
+  nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-12,"acceptable_tol"=>1e-12,"max_iter"=>5000))
 
   nnode = length(Vnom) # get number of nodes from # of Vnom elements
   nmeas = length(rmat) # get number of measurements from # of rmat elements
@@ -143,9 +144,10 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
   for i = 1:nnode
     if i in keys(Vnom)
       set_start_value.(v[i], Vnom[i][1])
-      if i in Source
-        @NLconstraint(nlp, v[i] == Vnom[i][1])
-      end
+# TODO: do we want this source bus magnitude constraint?
+#      if i in Source
+#        @NLconstraint(nlp, v[i] == Vnom[i][1])
+#      end
     end
   end
 
@@ -158,13 +160,15 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
     if i in keys(Vnom)
       start = Vnom[i][2]
       set_start_value.(T[i], deg2rad(start))
-      if i in Source
-        @NLconstraint(nlp, T[i] == deg2rad(start))
-      else
-        # if this angle constraint is broken up into two NLconstraints, one
-        # <= and one >=, bad things will happen with JuMP including crashes
-        @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
-      end
+# TODO: do we want this source bus angle constraint?
+#      if i in Source
+#        @NLconstraint(nlp, T[i] == deg2rad(start))
+#      else
+#        # if this angle constraint is broken up into two NLconstraints, one
+#        # <= and one >=, bad things will happen with JuMP including crashes
+#        @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
+#      end
+       @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
     end
   end
 
@@ -298,8 +302,12 @@ for row = 1:1 # first timestamp only
 #for row = 1:nrows # all timestamps
   # first optimization for each zone using vnom data for starting point
   for zone = 0:5
-    println("first estimate for row: $(row), zone: $(zone)")
-    estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
+# TODO: zones 2 and 4 crash Julia during optimization if the tolerance is
+# tighter than 1e-8 and source bus constraints are used
+#    if zone!=2 && zone!=4
+      println("first estimate for row: $(row), zone: $(zone)")
+      estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
+#    end
   end
 
   # update starting values with v/T solution values from first optimization
