@@ -118,7 +118,7 @@ end
 #  - measdata: streaming measurement data for populating zvec
 
 # State as of Feb 28:
-# * Julia crashes are associated with zones 2 and 4
+# * Julia crashes are mostly associated with zones 2 and 4, but not always
 # With physical unit inputs:
 #   * With full angle constraints Julia crashes with tolerance tighther
 #     than 1e-8
@@ -318,8 +318,6 @@ for row = 1:1 # first timestamp only
 #for row = 1:nrows # all timestamps
   # first optimization for each zone using vnom data for starting point
   for zone = 0:5
-# TODO: zones 2 and 4 crash Julia during optimization if the tolerance is
-# tighter than 1e-8 and source bus constraints are used
 #    if zone!=2 && zone!=4
       println("first estimate for row: $(row), zone: $(zone)")
       estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
@@ -328,8 +326,10 @@ for row = 1:1 # first timestamp only
 
   # update starting values with v/T solution values from first optimization
   for zone = 0:5
-    set_start_value.(v[zone], value.(v[zone]))
-    set_start_value.(T[zone], value.(T[zone]))
+#    if zone!=2 && zone!=4
+      set_start_value.(v[zone], value.(v[zone]))
+      set_start_value.(T[zone], value.(T[zone]))
+#    end
   end
 
   # exchange shared node values updating v/T starting values
@@ -344,19 +344,23 @@ for row = 1:1 # first timestamp only
 
   # second optimization using shared node values
   for zone = 0:5
-    println("second estimate for row: $(row), zone: $(zone)")
-    estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
+#    if zone!=2 && zone!=4
+      println("second estimate for row: $(row), zone: $(zone)")
+      estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
+#    end
   end
 
   # reset starting values back to Vnom so there is no "timestamp memory"
   # no need to set constraints because those were never updated with
   # shared node data exchange
   for zone = 0:5
-    for i = 1:nnode
-      if i in keys(Vnom[zone])
-        set_start_value.(v[zone][i], Vnom[zone][i][1])
-        set_start_value.(T[zone][i], deg2rad(Vnom[zone][i][2]))
-      end
+#    if zone!=2 && zone!=4
+      for i = 1:nnode
+        if i in keys(Vnom[zone])
+          set_start_value.(v[zone][i], Vnom[zone][i][1])
+          set_start_value.(T[zone][i], deg2rad(Vnom[zone][i][2]))
+        end
+#      end
     end
   end
 end
