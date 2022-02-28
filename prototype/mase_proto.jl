@@ -317,13 +317,14 @@ nnode = length(Vnom[0])
 for row = 1:1 # first timestamp only
 #for row = 1:nrows # all timestamps
   # first optimization for each zone using vnom data for starting point
-  for zone = 0:5
+  #for zone = 0:5
+  for zone = 2:2
 #    if zone!=2 && zone!=4
       println("first estimate for row: $(row), zone: $(zone)")
       estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
 #    end
   end
-
+#=
   # update starting values with v/T solution values from first optimization
   for zone = 0:5
 #    if zone!=2 && zone!=4
@@ -363,5 +364,6 @@ for row = 1:1 # first timestamp only
 #      end
     end
   end
+=#
 end
 
