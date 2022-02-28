@@ -8,11 +8,13 @@ using SparseArrays
 function get_input(zone, Shared)
   println("    Reading input files for zone: $(zone)")
   nodename_nodeidx_map = Dict()
+  nodename = Vector{String}()
 
   inode = 0
   for row in CSV.File(string("mase_files/nodelist.csv.", zone), header=false)
     inode += 1
     nodename_nodeidx_map[row[1]] = inode
+    push!(nodename, row[1])
 
     if row[1] in keys(Shared)
       push!(Shared[row[1]], (zone, inode))
@@ -99,7 +101,7 @@ function get_input(zone, Shared)
 
   measdata = CSV.File(string("mase_files/measurement_data.csv.", zone))
 
-  return measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata
+  return measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, nodename, measdata
 end
 
 
@@ -237,7 +239,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
 end
 
 
-function estimate(nlp, zvec, v, T, measurement)
+function estimate(nlp, zvec, v, T, measurement, nodename)
   # populate zvec with measurement data for given timestep and call solver
 
   println("\n================================================================================\n")
@@ -255,6 +257,11 @@ function estimate(nlp, zvec, v, T, measurement)
   solution_summary(nlp, verbose=true)
   println("v = $(value.(v))")
   println("T = $(value.(T))")
+
+  nnode = length(nodename)
+  for inode in 1:nnode
+    println("$(nodename[inode]) v exp: XXX, sol: $(value.(v[inode])), %err: XXX")
+  end
 end
 
 
@@ -274,9 +281,10 @@ Ybus = Dict()
 Vnom = Dict()
 Source = Dict()
 measdata = Dict()
+nodename = Dict()
 
 for zone = 0:5
-  measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Vnom[zone], Source[zone], measdata[zone] = get_input(zone, Shared)
+  measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Vnom[zone], Source[zone], nodename[zone], measdata[zone] = get_input(zone, Shared)
 end
 
 Sharednodes = Dict()
@@ -321,7 +329,7 @@ for row = 1:1 # first timestamp only
   for zone = 2:2
 #    if zone!=2 && zone!=4
       println("first estimate for row: $(row), zone: $(zone)")
-      estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row])
+      estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row], nodename[zone])
 #    end
   end
 #=
