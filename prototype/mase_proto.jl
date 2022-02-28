@@ -118,9 +118,9 @@ end
 #  - measdata: streaming measurement data for populating zvec
 
 function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
-  #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>5000,"linear_solver"=>"mumps"))
+  nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>5000,"linear_solver"=>"mumps"))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-12,"acceptable_tol"=>1e-12,"max_iter"=>1000))
-  nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10))
+  #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10))
 
   nnode = length(Vnom) # get number of nodes from # of Vnom elements
   nmeas = length(rmat) # get number of measurements from # of rmat elements
@@ -162,14 +162,14 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
       start = Vnom[i][2]
       set_start_value.(T[i], deg2rad(start))
 # TODO: do we want this source bus angle constraint?
-#      if i in Source
-#        @NLconstraint(nlp, T[i] == deg2rad(start))
-#      else
-#        # if this angle constraint is broken up into two NLconstraints, one
-#        # <= and one >=, bad things will happen with JuMP including crashes
-#        @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
-#      end
-      @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
+      if i in Source
+        @NLconstraint(nlp, T[i] == deg2rad(start))
+      else
+        # if this angle constraint is broken up into two NLconstraints, one
+        # <= and one >=, bad things will happen with JuMP including crashes
+        @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
+     end
+#      @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
     end
   end
 
@@ -322,7 +322,8 @@ for row = 1:1 # first timestamp only
     for (nodedest, source) in Zonenodes
       println("sharing destination zone: $(zonedest), node: $(nodedest), value: $(value.(v[zonedest][nodedest])), source zone: $(source[1]), node: $(source[2]), value: $(value.(v[source[1]][source[2]]))")
       set_start_value.(v[zonedest][nodedest], value.(v[source[1]][source[2]]))
-      set_start_value.(T[zonedest][nodedest], value.(T[source[1]][source[2]]))
+      # don't exchange angle values
+      #set_start_value.(T[zonedest][nodedest], value.(T[source[1]][source[2]]))
     end
   end
 
