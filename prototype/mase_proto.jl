@@ -117,6 +117,21 @@ end
 #  - Source: source bus node indices as a vector
 #  - measdata: streaming measurement data for populating zvec
 
+# State as of Feb 28:
+# * Julia crashes are associated with zones 2 and 4
+# With physical unit inputs:
+#   * With full angle constraints Julia crashes with tolerance tighther
+#     than 1e-8
+#   * With only the +/-90 degree angle constraints, it will optimize with any
+#     tolerance value
+# With per-unit inputs:
+#   * objective function values always a couple of orders of magnitude
+#     higher than with physical units
+#   * With full angle constraints Julia crashes with tolerance tighther
+#     than 1e-10
+#   * With only the +/-90 degree angle constraints, it will optimize with any
+#     tolerance value
+
 function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
   nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>5000,"linear_solver"=>"mumps"))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-12,"acceptable_tol"=>1e-12,"max_iter"=>1000))
