@@ -239,7 +239,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
 end
 
 
-function estimate(nlp, zvec, v, T, measurement, nodename)
+function estimate(nlp, zvec, v, T, measurement, nodename, zone)
   # populate zvec with measurement data for given timestep and call solver
 
   println("\n================================================================================\n")
@@ -258,10 +258,21 @@ function estimate(nlp, zvec, v, T, measurement, nodename)
   println("v = $(value.(v))")
   println("T = $(value.(T))")
 
-  nnode = length(nodename)
-  for inode in 1:nnode
-    println("$(nodename[inode]) v exp: XXX, sol: $(value.(v[inode])), %err: XXX")
+  println("\n*** zone: $(zone)")
+  inode = 0
+  for row in CSV.File(string("mase_files/result_data.csv.", zone), header=false)
+    inode += 1
+    expected = row[2]
+    solution = value.(v[inode])
+    pererr = 100.0 * abs(solution - expected)/expected
+    println("$(nodename[inode]) v exp: $(expected), sol: $(solution), %err: $(pererr)")
   end
+  println("")
+
+  #nnode = length(nodename)
+  #for inode in 1:nnode
+  #  println("$(nodename[inode]) v exp: XXX, sol: $(value.(v[inode])), %err: XXX")
+  #end
 end
 
 
@@ -325,11 +336,11 @@ nnode = length(Vnom[0])
 for row = 1:1 # first timestamp only
 #for row = 1:nrows # all timestamps
   # first optimization for each zone using vnom data for starting point
-  #for zone = 0:5
-  for zone = 2:2
+  for zone = 0:5
+  #for zone = 2:2
 #    if zone!=2 && zone!=4
       println("first estimate for row: $(row), zone: $(zone)")
-      estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row], nodename[zone])
+      estimate(nlp[zone], zvec[zone], v[zone], T[zone], measdata[zone][row], nodename[zone], zone)
 #    end
   end
 #=
