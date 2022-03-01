@@ -122,17 +122,17 @@ end
 # State as of Feb 28:
 # * Julia crashes are mostly associated with zones 2 and 4, but not always
 # With physical unit inputs:
-#   * With full angle constraints Julia crashes with tolerance tighther
-#     than 1e-8
-#   * With only the +/-90 degree angle constraints, it will optimize with any
-#     tolerance value
+#   * With the source bus angle equality constraint Julia crashes with
+#     tolerance tighther than 1e-8
+#   * With only the +/-90 degree inequality angle constraint, it will optimize
+#     with any tolerance value
 # With per-unit inputs:
 #   * objective function values always a couple of orders of magnitude
 #     higher than with physical units
-#   * With full angle constraints Julia crashes with tolerance tighther
-#     than 1e-10
-#   * With only the +/-90 degree angle constraints, it will optimize with any
-#     tolerance value
+#   * With the source bus angle equality constraint Julia crashes with
+#     tolerance tighther than 1e-10
+#   * With only the +/-90 degree inequality angle constraint, it will optimize
+#     with any tolerance value
 
 function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
   nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>5000,"linear_solver"=>"mumps"))
@@ -162,7 +162,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
   for i = 1:nnode
     if i in keys(Vnom)
       set_start_value.(v[i], Vnom[i][1])
-# TODO: do we want this source bus magnitude constraint?
+# TODO: do we want this source bus magnitude equality constraint?
 #      if i in Source
 #        @NLconstraint(nlp, v[i] == Vnom[i][1])
 #      end
@@ -178,15 +178,15 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source)
     if i in keys(Vnom)
       start = Vnom[i][2]
       set_start_value.(T[i], deg2rad(start))
-# TODO: do we want this source bus angle constraint?
-      if i in Source
-        @NLconstraint(nlp, T[i] == deg2rad(start))
-      else
-        # if this angle constraint is broken up into two NLconstraints, one
-        # <= and one >=, bad things will happen with JuMP including crashes
-        @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
-     end
-#      @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
+# TODO: do we want this source bus angle equality constraint?
+#      if i in Source
+#        @NLconstraint(nlp, T[i] == deg2rad(start))
+#      else
+#        # if this angle constraint is broken up into two NLconstraints, one
+#        # <= and one >=, bad things will happen with JuMP including crashes
+#        @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
+#     end
+      @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
     end
   end
 
@@ -251,7 +251,7 @@ function estimate(nlp, zvec, v, T, measurement, nodename, zone)
   for imeas in 1:nmeas
     set_value(zvec[imeas], measurement[imeas+1])
   end
-  println("*** Timestamp with measurements: $(measurement)\n")
+  #println("*** Timestamp with measurements: $(measurement)\n")
 
   @time optimize!(nlp)
   solution_summary(nlp, verbose=true)
