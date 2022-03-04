@@ -377,7 +377,7 @@ for row = 1:1 # first timestamp only
   #for zone = 2:2
 #    if zone!=2 && zone!=4
       println("\n================================================================================")
-      println("First estimate for timestamp #$(row), zone: $(zone)\n")
+      println("1st optimization for timestamp #$(row), zone: $(zone)\n")
       estimate(nlp[zone], v[zone], T[zone], nodename[zone], zone)
 #    end
   end
@@ -386,7 +386,7 @@ for row = 1:1 # first timestamp only
   for zone = 0:5
 #    if zone!=2 && zone!=4
       set_start_value.(v[zone], value.(v[zone]))
-      set_start_value.(T[zone], value.(T[zone]))
+      #set_start_value.(T[zone], value.(T[zone]))
 #    end
   end
 
@@ -412,7 +412,7 @@ for row = 1:1 # first timestamp only
   for zone = 0:5
 #    if zone!=2 && zone!=4
       println("\n================================================================================")
-      println("2nd estimate for timestamp #$(row), zone: $(zone)\n")
+      println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
       estimate(nlp[zone], v[zone], T[zone], nodename[zone], zone)
 #    end
   end
