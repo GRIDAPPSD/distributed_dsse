@@ -149,7 +149,7 @@ end
 
 function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, source_nodeidxs)
   nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>1000,"linear_solver"=>"mumps"))
-  #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"max_iter"=>1000,"linear_solver"=>"mumps"))
+  #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer)) # tol default to 1e-8 and acceptable_tol defaults to 1e-6
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-12,"acceptable_tol"=>1e-12,"max_iter"=>2000)) # not recommended, lots of iterating with no better results
@@ -257,22 +257,24 @@ end
 function estimate(nlp, v, T, nodename, zone)
   # populate zvec with measurement data for given timestep and call solver
 
-  println("\n================================================================================\n")
   @time optimize!(nlp)
   solution_summary(nlp, verbose=true)
   println("v = $(value.(v))")
   println("T = $(value.(T))")
 
-  println("\n*** zone: $(zone)")
+  println("\n*** Solution for zone $(zone):")
   inode = 0
+  toterr = 0.0
   for row in CSV.File(string("mase_files/result_data.csv.", zone), header=false)
     inode += 1
     expected = row[2]
     solution = value.(v[inode])
     pererr = 100.0 * abs(solution - expected)/expected
+    toterr += pererr
     println("$(nodename[inode]) v exp: $(expected), sol: $(solution), %err: $(pererr)")
   end
-  println("")
+  avgerr = toterr/inode
+  println("*** Average %err zone $(zone): $(avgerr)")
 
   #nnode = length(nodename)
   #for inode in 1:nnode
@@ -374,7 +376,8 @@ for row = 1:1 # first timestamp only
   for zone = 0:5
   #for zone = 2:2
 #    if zone!=2 && zone!=4
-      println("first estimate for row: $(row), zone: $(zone)")
+      println("\n================================================================================")
+      println("First estimate for timestamp #$(row), zone: $(zone)\n")
       estimate(nlp[zone], v[zone], T[zone], nodename[zone], zone)
 #    end
   end
@@ -408,7 +411,8 @@ for row = 1:1 # first timestamp only
   # second optimization using shared node values
   for zone = 0:5
 #    if zone!=2 && zone!=4
-      println("second estimate for row: $(row), zone: $(zone)")
+      println("\n================================================================================")
+      println("2nd estimate for timestamp #$(row), zone: $(zone)\n")
       estimate(nlp[zone], v[zone], T[zone], nodename[zone], zone)
 #    end
   end
