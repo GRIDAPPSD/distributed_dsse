@@ -403,6 +403,29 @@ for row = 1:1 # first timestamp only
   #   The "*" operation is complex conjugate
   #   Ybus will be created as a dense matrix for the initial implementation
 
+  for zone = 0:5
+    nnode = length(Vnom[zone]) # get number of nodes from # of Vnom elements
+    println("\nZone #$(zone)")
+
+    V = Array{ComplexF64}(undef, nnode)
+    for i = 1:nnode
+      V[i] = complex(value.(v[zone][i]), value.(T[zone][i]))
+    end
+    #println(V)
+
+    YbusD = zeros(ComplexF64, nnode, nnode)
+    for (row, coldict) in Ybus[zone]
+      for (col, value) in coldict
+        YbusD[row,col] = value
+        #println("YbusD[$(row),$(col)] = $(value)")
+      end
+    end
+    #println(YbusD)
+
+    S = V .* conj(YbusD * V)
+    println(S)
+  end
+
 
 #=
   # exchange shared node values updating v/T starting values
