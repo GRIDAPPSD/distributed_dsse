@@ -40,7 +40,7 @@ function get_input(zone, shared_nodenames)
 
     measidx_nodeidx_map[imeas] = nodename_nodeidx_map[row[3]]
 
-    if row[3] in keys(shared_nodenames) && stype!="Ti"
+    if row[3] in keys(shared_nodenames)
       nodeidx = nodename_nodeidx_map[row[3]]
       if !(nodeidx in keys(shared_nodeidx_measidx_map))
         shared_nodeidx_measidx_map[nodeidx] = Vector{Int64}()
@@ -256,8 +256,7 @@ end
 
 
 function estimate(nlp, v, T, nodename, zone)
-  # populate zvec with measurement data for given timestep and call solver
-
+  # call solver given everything is setup coming in
   @time optimize!(nlp)
   solution_summary(nlp, verbose=true)
   println("v = $(value.(v))")
@@ -374,7 +373,7 @@ for row = 1:1 # first timestamp only
 #     end
   end
 
-  # first optimization for each zone using vnom data for starting point
+  # first optimization for each zone
   for zone = 0:5
   #for zone = 2:2
 #    if zone!=2 && zone!=4
@@ -384,6 +383,7 @@ for row = 1:1 # first timestamp only
 #    end
   end
 
+#=
   # update starting values with v/T solution values from first optimization
   for zone = 0:5
 #    if zone!=2 && zone!=4
@@ -391,6 +391,7 @@ for row = 1:1 # first timestamp only
       #set_start_value.(T[zone], value.(T[zone]))
 #    end
   end
+=#
 
   # DATA EXCHANGE
   # for Pi and Qi measurement data exchange, need to compute:
@@ -405,6 +406,7 @@ for row = 1:1 # first timestamp only
   #   The "*" operation is complex conjugate
   #   Ybus will be created as a dense matrix for the initial implementation
 
+  S = Dict()
   for zone = 0:5
     nnode = length(Vnom[zone]) # get number of nodes from # of Vnom elements
     println("\nZone #$(zone)")
@@ -415,18 +417,29 @@ for row = 1:1 # first timestamp only
     end
     #println(V)
 
-    S = V .* conj(Ybusp[zone] * V)
-    println(S)
+    S[zone] = V .* conj(Ybusp[zone] * V)
+    println(S[zone])
   end
 
-  # measidxs for each measurement type is the key for figuring out what to
-  # update in zvec
-  # trace the logic below for updating zvec and see if there is a way I can
-  # introduce measidxs to figure out what to exchange
-  # or, would it be better to augment Sharedmeas to build in info related to
-  # measurement type to make it simpler to do the exchange
-  # also thinking that I should trash the first block that updates starting
-  # values and therefore the Sharednodes structure
+  # exchange shared node values updating zvec measurement values
+  for (zonedest, Zonemeas) in Sharedmeas
+    for (measdest, source) in Zonemeas
+      println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
+      if "vi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["vi"]
+        println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
+        set_value(zvec[zonedest][measdest], value.(v[source[1]][source[2]]))
+      elseif "Ti" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Ti"]
+        println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T value: $(value.(T[source[1]][source[2]]))")
+        set_value(zvec[zonedest][measdest], value.(T[source[1]][source[2]]))
+      elseif "Pi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Pi"]
+        println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), S real value: $(real(S[source[1]][source[2]]))")
+        set_value(zvec[zonedest][measdest], real(S[source[1]][source[2]]))
+      elseif "Qi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Qi"]
+        println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), S imag value: $(imag(S[source[1]][source[2]]))")
+        set_value(zvec[zonedest][measdest], imag(S[source[1]][source[2]]))
+      end
+    end
+  end
 
 #=
   # exchange shared node values updating v/T starting values
@@ -438,15 +451,9 @@ for row = 1:1 # first timestamp only
       #set_start_value.(T[zonedest][nodedest], value.(T[source[1]][source[2]]))
     end
   end
+=#
 
-  # exchange shared node values updating zvec measurement values
-  for (zonedest, Zonemeas) in Sharedmeas
-    for (measdest, source) in Zonemeas
-      println("measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), value: $(value.(v[source[1]][source[2]]))")
-      set_value(zvec[zonedest][measdest], value.(v[source[1]][source[2]]))
-    end
-  end
-
+#=
   # second optimization using shared node values
   for zone = 0:5
 #    if zone!=2 && zone!=4
@@ -455,7 +462,9 @@ for row = 1:1 # first timestamp only
       estimate(nlp[zone], v[zone], T[zone], nodename[zone], zone)
 #    end
   end
+=#
 
+#=
   # reset starting values back to Vnom so there is no "timestamp memory"
   # no need to set constraints because those were never updated with
   # shared node data exchange
