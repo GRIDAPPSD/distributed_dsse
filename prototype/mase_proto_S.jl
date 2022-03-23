@@ -79,6 +79,7 @@ function get_input(zone, shared_nodenames)
   # using the nzrange() function in place of keys() for a dictionary, but gave
   # an out of bounds array access error so went back to dictionary
   Ybus = Dict()
+  Ybusp = spzeros(ComplexF64, inode, inode)
   #YbusG = spzeros(Float64, inode, inode)
   #YbusB = spzeros(Float64, inode, inode)
   ibus = 0
@@ -87,7 +88,7 @@ function get_input(zone, shared_nodenames)
       Ybus[row[1]] = Dict()
     end
     # must construct full Ybus, not just lower diagonal elements
-    Ybus[row[1]][row[2]] = Ybus[row[2]][row[1]] = complex(row[3], row[4])
+    Ybus[row[1]][row[2]] = Ybus[row[2]][row[1]] = Ybusp[row[1],row[2]] = Ybusp[row[2],row[1]] = complex(row[3], row[4])
     #YbusG[row[1],row[2]] = YbusG[row[2],row[1]] = row[3]
     #YbusB[row[1],row[2]] = YbusB[row[2],row[1]] = row[4]
     ibus += 1
@@ -114,7 +115,7 @@ function get_input(zone, shared_nodenames)
 
   measdata = CSV.File(string("mase_files/measurement_data.csv.", zone))
 
-  return measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, source_nodeidxs, nodename, shared_nodeidx_measidx_map, measdata
+  return measidxs, measidx_nodeidx_map, rmat, Ybus, Ybusp, Vnom, source_nodeidxs, nodename, shared_nodeidx_measidx_map, measdata
 end
 
 
@@ -296,6 +297,7 @@ measidxs = Dict()
 measidx_nodeidx_map = Dict()
 rmat = Dict()
 Ybus = Dict()
+Ybusp = Dict()
 Vnom = Dict()
 source_nodeidxs = Dict()
 nodename = Dict()
@@ -303,7 +305,7 @@ shared_nodeidx_measidx_map = Dict()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Vnom[zone], source_nodeidxs[zone], nodename[zone], shared_nodeidx_measidx_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
+  measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Ybusp[zone], Vnom[zone], source_nodeidxs[zone], nodename[zone], shared_nodeidx_measidx_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
 end
 
 Sharednodes = Dict()
@@ -413,18 +415,18 @@ for row = 1:1 # first timestamp only
     end
     #println(V)
 
-    Ybusp = spzeros(ComplexF64, nnode, nnode)
-    for (row, coldict) in Ybus[zone]
-      for (col, value) in coldict
-        Ybusp[row,col] = value
-        #println("Ybusp[$(row),$(col)] = $(value)")
-      end
-    end
-    #println(Ybusp)
-
-    S = V .* conj(Ybusp * V)
+    S = V .* conj(Ybusp[zone] * V)
     println(S)
   end
+
+  # measidxs for each measurement type is the key for figuring out what to
+  # update in zvec
+  # trace the logic below for updating zvec and see if there is a way I can
+  # introduce measidxs to figure out what to exchange
+  # or, would it be better to augment Sharedmeas to build in info related to
+  # measurement type to make it simpler to do the exchange
+  # also thinking that I should trash the first block that updates starting
+  # values and therefore the Sharednodes structure
 
 #=
   # exchange shared node values updating v/T starting values
