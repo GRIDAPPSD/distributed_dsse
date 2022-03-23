@@ -413,19 +413,18 @@ for row = 1:1 # first timestamp only
     end
     #println(V)
 
-    YbusD = zeros(ComplexF64, nnode, nnode)
+    Ybusp = spzeros(ComplexF64, nnode, nnode)
     for (row, coldict) in Ybus[zone]
       for (col, value) in coldict
-        YbusD[row,col] = value
-        #println("YbusD[$(row),$(col)] = $(value)")
+        Ybusp[row,col] = value
+        #println("Ybusp[$(row),$(col)] = $(value)")
       end
     end
-    #println(YbusD)
+    #println(Ybusp)
 
-    S = V .* conj(YbusD * V)
+    S = V .* conj(Ybusp * V)
     println(S)
   end
-
 
 #=
   # exchange shared node values updating v/T starting values
