@@ -413,7 +413,7 @@ for row = 1:1 # first timestamp only
 
     V = Array{ComplexF64}(undef, nnode)
     for i = 1:nnode
-      V[i] = complex(value.(v[zone][i]), value.(T[zone][i]))
+      V[i] = value.(v[zone][i]) * exp(value.(T[zone][i])*1im)
     end
     #println(V)
 
@@ -421,10 +421,11 @@ for row = 1:1 # first timestamp only
     println(S[zone])
   end
 
+
   # exchange shared node values updating zvec measurement values
   for (zonedest, Zonemeas) in Sharedmeas
     for (measdest, source) in Zonemeas
-      println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
+      #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
       if "vi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["vi"]
         println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
         set_value(zvec[zonedest][measdest], value.(v[source[1]][source[2]]))
@@ -432,11 +433,11 @@ for row = 1:1 # first timestamp only
         println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T value: $(value.(T[source[1]][source[2]]))")
         set_value(zvec[zonedest][measdest], value.(T[source[1]][source[2]]))
       elseif "Pi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Pi"]
-        println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), S real value: $(real(S[source[1]][source[2]]))")
-        set_value(zvec[zonedest][measdest], real(S[source[1]][source[2]]))
+        println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S real value: $(-1*real(S[source[1]][source[2]]))")
+        set_value(zvec[zonedest][measdest], -1*real(S[source[1]][source[2]]))
       elseif "Qi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Qi"]
-        println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), S imag value: $(imag(S[source[1]][source[2]]))")
-        set_value(zvec[zonedest][measdest], imag(S[source[1]][source[2]]))
+        println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S imag value: $(-1*imag(S[source[1]][source[2]]))")
+        set_value(zvec[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
       end
     end
   end
@@ -453,7 +454,6 @@ for row = 1:1 # first timestamp only
   end
 =#
 
-#=
   # second optimization using shared node values
   for zone = 0:5
 #    if zone!=2 && zone!=4
@@ -462,7 +462,6 @@ for row = 1:1 # first timestamp only
       estimate(nlp[zone], v[zone], T[zone], nodename[zone], zone)
 #    end
   end
-=#
 
 #=
   # reset starting values back to Vnom so there is no "timestamp memory"
