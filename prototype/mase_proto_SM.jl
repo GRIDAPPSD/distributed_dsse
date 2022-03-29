@@ -22,56 +22,67 @@ function get_input(zone, shared_nodenames)
   end
   println("    Total number of nodes: $(inode)")
 
-  measidxs = Dict()
-  measidx_nodeidx_map = Dict()
-  shared_nodeidx_measidx_map = Dict()
-  rmat = Vector{Float64}()
+  # must initialize these 1st and 2nd estimate data structures separately so
+  # they don't point to the same thing
+  measidxs1 = Dict()
+  measidxs2 = Dict()
+  measidx1_nodeidx_map = Dict()
+  measidx2_nodeidx_map = Dict()
+  shared_nodeidx_measidx1_map = Dict()
+  shared_nodeidx_measidx2_map = Dict()
+  rmat1 = Vector{Float64}()
+  rmat2 = Vector{Float64}()
 
   imeas = 0
   for row in CSV.File(string("mase_files/measurements.csv.", zone))
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
     stype = row[1]
-    if !(stype in keys(measidxs))
-      measidxs[stype] = Vector{Int64}()
+    if !(stype in keys(measidxs1))
+      measidxs1[stype] = Vector{Int64}()
+      measidxs2[stype] = Vector{Int64}()
     end
     imeas += 1
-    append!(measidxs[stype], imeas)
+    append!(measidxs1[stype], imeas)
+    append!(measidxs2[stype], imeas)
 
-    measidx_nodeidx_map[imeas] = nodename_nodeidx_map[row[3]]
+    measidx1_nodeidx_map[imeas] = measidx2_nodeidx_map[imeas] = nodename_nodeidx_map[row[3]]
+
+    append!(rmat1, row[6]^2)
+    append!(rmat2, row[6]^2)
 
     if row[3] in keys(shared_nodenames)
       nodeidx = nodename_nodeidx_map[row[3]]
-      if !(nodeidx in keys(shared_nodeidx_measidx_map))
-        shared_nodeidx_measidx_map[nodeidx] = Vector{Int64}()
+      if !(nodeidx in keys(shared_nodeidx_measidx1_map))
+        shared_nodeidx_measidx1_map[nodeidx] = Vector{Int64}()
+        shared_nodeidx_measidx2_map[nodeidx] = Vector{Int64}()
       end
 
-      append!(shared_nodeidx_measidx_map[nodeidx], imeas)
+      append!(shared_nodeidx_measidx1_map[nodeidx], imeas)
+      append!(shared_nodeidx_measidx2_map[nodeidx], imeas)
     end
-
-    append!(rmat, row[6]^2)
   end
 
   println("    Total number of measurements: $(imeas)")
-  if "vi" in keys(measidxs)
-    println("    Number of vi measurements: $(length(measidxs["vi"]))")
-    println("    vi measurement indices: $(measidxs["vi"])")
+  if "vi" in keys(measidxs1)
+    println("    Number of vi measurements: $(length(measidxs1["vi"]))")
+    println("    vi measurement indices: $(measidxs1["vi"])")
   end
-  if "Ti" in keys(measidxs)
-    println("    Number of Ti measurements: $(length(measidxs["Ti"]))")
-    println("    Ti measurement indices: $(measidxs["Ti"])")
+  if "Ti" in keys(measidxs1)
+    println("    Number of Ti measurements: $(length(measidxs1["Ti"]))")
+    println("    Ti measurement indices: $(measidxs1["Ti"])")
   end
-  if "Pi" in keys(measidxs)
-    println("    Number of Pi measurements: $(length(measidxs["Pi"]))")
-    println("    Pi measurement indices: $(measidxs["Pi"])")
+  if "Pi" in keys(measidxs1)
+    println("    Number of Pi measurements: $(length(measidxs1["Pi"]))")
+    println("    Pi measurement indices: $(measidxs1["Pi"])")
   end
-  if "Qi" in keys(measidxs)
-    println("    Number of Qi measurements: $(length(measidxs["Qi"]))")
-    println("    Qi measurement indices: $(measidxs["Qi"])")
+  if "Qi" in keys(measidxs1)
+    println("    Number of Qi measurements: $(length(measidxs1["Qi"]))")
+    println("    Qi measurement indices: $(measidxs1["Qi"])")
   end
 
-  println("    Measurement node index map: $(measidx_nodeidx_map)")
-  println("    Shared node measurement index map: $(shared_nodeidx_measidx_map)")
+  println("    Measurement node index map: $(measidx1_nodeidx_map)")
+  println("    Shared node measurement index map: $(shared_nodeidx_measidx1_map)")
 
   # TODO: objective function works on dictionaries rather than potentially
   # faster Julia SparseArray data types. Commented out code below populates
@@ -115,7 +126,7 @@ function get_input(zone, shared_nodenames)
 
   measdata = CSV.File(string("mase_files/measurement_data.csv.", zone))
 
-  return measidxs, measidx_nodeidx_map, rmat, Ybus, Ybusp, Vnom, source_nodeidxs, nodename, shared_nodeidx_measidx_map, measdata
+  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, source_nodeidxs, nodename, shared_nodeidx_measidx1_map, shared_nodeidx_measidx2_map, measdata
 end
 
 
@@ -292,19 +303,23 @@ for row in CSV.File("mase_files/sharednodelist.csv", header=false)
   shared_nodenames[row[1]] = []
 end
 
-measidxs = Dict()
-measidx_nodeidx_map = Dict()
-rmat = Dict()
+measidxs1 = Dict()
+measidxs2 = Dict()
+measidx1_nodeidx_map = Dict()
+measidx2_nodeidx_map = Dict()
+rmat1 = Dict()
+rmat2 = Dict()
 Ybus = Dict()
 Ybusp = Dict()
 Vnom = Dict()
 source_nodeidxs = Dict()
 nodename = Dict()
-shared_nodeidx_measidx_map = Dict()
+shared_nodeidx_measidx1_map = Dict()
+shared_nodeidx_measidx2_map = Dict()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Ybusp[zone], Vnom[zone], source_nodeidxs[zone], nodename[zone], shared_nodeidx_measidx_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
+  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], source_nodeidxs[zone], nodename[zone], shared_nodeidx_measidx1_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
 end
 
 Sharednodes = Dict()
@@ -318,7 +333,7 @@ for (key, value) in shared_nodenames
   end
   Sharednodes[zone][inode] = value[2]
 
-  for imeas in shared_nodeidx_measidx_map[zone][inode]
+  for imeas in shared_nodeidx_measidx1_map[zone][inode]
     Sharedmeas[zone][imeas] = value[2]
   end
 
@@ -330,7 +345,7 @@ for (key, value) in shared_nodenames
   end
   Sharednodes[zone][inode] = value[1]
 
-  for imeas in shared_nodeidx_measidx_map[zone][inode]
+  for imeas in shared_nodeidx_measidx1_map[zone][inode]
     Sharedmeas[zone][imeas] = value[1]
   end
 end
@@ -340,13 +355,18 @@ println("Sharedmeas dictionary: $(Sharedmeas)\n")
 
 println("Done parsing input files, start defining optimization problem...")
 
-nlp = Dict()
-zvec = Dict()
-v = Dict()
-T = Dict()
+nlp1 = Dict()
+nlp2 = Dict()
+zvec1 = Dict()
+zvec2 = Dict()
+v1 = Dict()
+v2 = Dict()
+T1 = Dict()
+T2 = Dict()
 
 for zone = 0:5
-  nlp[zone], zvec[zone], v[zone], T[zone] = setup_estimate(measidxs[zone], measidx_nodeidx_map[zone], rmat[zone], Ybus[zone], Vnom[zone], source_nodeidxs[zone])
+  nlp1[zone], zvec1[zone], v1[zone], T1[zone] = setup_estimate(measidxs1[zone], measidx1_nodeidx_map[zone], rmat1[zone], Ybus[zone], Vnom[zone], source_nodeidxs[zone])
+  nlp2[zone], zvec2[zone], v2[zone], T2[zone] = setup_estimate(measidxs2[zone], measidx2_nodeidx_map[zone], rmat2[zone], Ybus[zone], Vnom[zone], source_nodeidxs[zone])
 end
 
 println("\nDone defining optimization problem, start solving it...")
@@ -360,38 +380,22 @@ for row = 1:1 # first timestamp only
 #for row = 1:nrows # all timestamps
 
   for zone = 0:5
-  #for zone = 2:2
-#     if zone!=2 && zone!=4
-     # This logic assumes that the order of measurement data (columns in a row)
-     # is the same as measurement order (rows) in measurements.csv
-     # If that's not the case, then this will require rework
-     measurement = measdata[zone][row]
-     for imeas in 1:length(measurement)-1
-       set_value(zvec[zone][imeas], measurement[imeas+1])
-     end
-     #println("*** Timestamp with measurements: $(measurement)\n")
-#     end
+    # This logic assumes that the order of measurement data (columns in a row)
+    # is the same as measurement order (rows) in measurements.csv
+    # If that's not the case, then this will require rework
+    measurement = measdata[zone][row]
+    for imeas in 1:length(measurement)-1
+      set_value(zvec1[zone][imeas], measurement[imeas+1])
+    end
+    #println("*** Timestamp with measurements: $(measurement)\n")
   end
 
   # first optimization for each zone
   for zone = 0:5
-  #for zone = 2:2
-#    if zone!=2 && zone!=4
-      println("\n================================================================================")
-      println("1st optimization for timestamp #$(row), zone: $(zone)\n")
-      estimate(nlp[zone], v[zone], T[zone], nodename[zone], zone)
-#    end
+    println("\n================================================================================")
+    println("1st optimization for timestamp #$(row), zone: $(zone)\n")
+    estimate(nlp1[zone], v1[zone], T1[zone], nodename[zone], zone)
   end
-
-#=
-  # update starting values with v/T solution values from first optimization
-  for zone = 0:5
-#    if zone!=2 && zone!=4
-      set_start_value.(v[zone], value.(v[zone]))
-      #set_start_value.(T[zone], value.(T[zone]))
-#    end
-  end
-=#
 
   # DATA EXCHANGE
   # for Pi and Qi measurement data exchange, need to compute:
@@ -405,7 +409,6 @@ for row = 1:1 # first timestamp only
   #   The "x" operation is regular matrix multiplication
   #   The "*" operation is complex conjugate
   #   Ybus will be created as a dense matrix for the initial implementation
-
   S = Dict()
   for zone = 0:5
     nnode = length(Vnom[zone]) # get number of nodes from # of Vnom elements
@@ -413,7 +416,7 @@ for row = 1:1 # first timestamp only
 
     V = Array{ComplexF64}(undef, nnode)
     for i = 1:nnode
-      V[i] = value.(v[zone][i]) * exp(value.(T[zone][i])*1im)
+      V[i] = value.(v1[zone][i]) * exp(value.(T1[zone][i])*1im)
     end
     #println(V)
 
@@ -421,63 +424,32 @@ for row = 1:1 # first timestamp only
     println(S[zone])
   end
 
-
   # exchange shared node values updating zvec measurement values
   for (zonedest, Zonemeas) in Sharedmeas
     for (measdest, source) in Zonemeas
       #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
-      if "vi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["vi"]
+      if "vi" in keys(measidxs1[zonedest]) && measdest in measidxs1[zonedest]["vi"]
         println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
-        set_value(zvec[zonedest][measdest], value.(v[source[1]][source[2]]))
-      elseif "Ti" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Ti"]
+        set_value(zvec2[zonedest][measdest], value.(v1[source[1]][source[2]]))
+      elseif "Ti" in keys(measidxs1[zonedest]) && measdest in measidxs1[zonedest]["Ti"]
         println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T value: $(value.(T[source[1]][source[2]]))")
-        set_value(zvec[zonedest][measdest], value.(T[source[1]][source[2]]))
-      elseif "Pi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Pi"]
+        set_value(zvec2[zonedest][measdest], value.(T1[source[1]][source[2]]))
+      elseif "Pi" in keys(measidxs1[zonedest]) && measdest in measidxs1[zonedest]["Pi"]
         println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S real value: $(-1*real(S[source[1]][source[2]]))")
-        set_value(zvec[zonedest][measdest], -1*real(S[source[1]][source[2]]))
-      elseif "Qi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Qi"]
+        set_value(zvec2[zonedest][measdest], -1*real(S[source[1]][source[2]]))
+      elseif "Qi" in keys(measidxs1[zonedest]) && measdest in measidxs1[zonedest]["Qi"]
         println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S imag value: $(-1*imag(S[source[1]][source[2]]))")
-        set_value(zvec[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
+        set_value(zvec2[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
       end
     end
   end
 
-#=
-  # exchange shared node values updating v/T starting values
-  for (zonedest, Zonenodes) in Sharednodes
-    for (nodedest, source) in Zonenodes
-      println("starting value sharing destination zone: $(zonedest), node: $(nodedest), source zone: $(source[1]), node: $(source[2]), value: $(value.(v[source[1]][source[2]]))")
-      set_start_value.(v[zonedest][nodedest], value.(v[source[1]][source[2]]))
-      # don't exchange angle values
-      #set_start_value.(T[zonedest][nodedest], value.(T[source[1]][source[2]]))
-    end
-  end
-=#
-
   # second optimization using shared node values
   for zone = 0:5
-#    if zone!=2 && zone!=4
-      println("\n================================================================================")
-      println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
-      estimate(nlp[zone], v[zone], T[zone], nodename[zone], zone)
-#    end
+    println("\n================================================================================")
+    println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
+    estimate(nlp2[zone], v2[zone], T2[zone], nodename[zone], zone)
   end
-
-#=
-  # reset starting values back to Vnom so there is no "timestamp memory"
-  # no need to set constraints because those were never updated with
-  # shared node data exchange
-  for zone = 0:5
-#    if zone!=2 && zone!=4
-      for i = 1:nnode
-        if i in keys(Vnom[zone])
-          set_start_value.(v[zone][i], Vnom[zone][i][1])
-          set_start_value.(T[zone][i], deg2rad(Vnom[zone][i][2]))
-        end
-#      end
-    end
-  end
-=#
 
 end
 
