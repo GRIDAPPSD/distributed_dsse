@@ -4,12 +4,13 @@ using Ipopt
 using CSV
 using SparseArrays
 
+test_dir = "test_13assets_lf"
 
 function get_input()
   nodename_nodeidx_map = Dict()
 
   inode = 0
-  for row in CSV.File("test/nodelist.csv", header=false)
+  for row in CSV.File(test_dir*"/nodelist.csv", header=false)
     inode += 1
     nodename_nodeidx_map[row[1]] = inode # this one is needed below
   end
@@ -20,7 +21,7 @@ function get_input()
   rmat = Vector{Float64}()
 
   imeas = 0
-  for row in CSV.File("test/measurements.csv")
+  for row in CSV.File(test_dir*"/measurements.csv")
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
     stype = row[1]
@@ -62,7 +63,7 @@ function get_input()
   #YbusG = spzeros(Float64, inode, inode)
   #YbusB = spzeros(Float64, inode, inode)
   ibus = 0
-  for row in CSV.File("test/ysparse.csv")
+  for row in CSV.File(test_dir*"/ysparse.csv")
     if !haskey(Ybus, row[1])
       Ybus[row[1]] = Dict()
     end
@@ -76,7 +77,7 @@ function get_input()
 
   Vnom = Dict()
   inom = 0
-  for row in CSV.File("test/vnom.csv")
+  for row in CSV.File(test_dir*"/vnom.csv")
     if row[1] in keys(nodename_nodeidx_map)
       Vnom[nodename_nodeidx_map[row[1]]] = (row[2], row[3])
       inom += 1
@@ -85,14 +86,14 @@ function get_input()
   println("    Vnom number of elements: $(inom)")
 
   Source = Vector{Int64}()
-  for row in CSV.File("test/sourcebus.csv", header=false)
+  for row in CSV.File(test_dir*"/sourcebus.csv", header=false)
     if row[1] in keys(nodename_nodeidx_map)
       append!(Source, nodename_nodeidx_map[row[1]])
     end
   end
   println("    source bus indices: $(Source)")
 
-  measdata = CSV.File("test/measurement_data.csv")
+  measdata = CSV.File(test_dir*"/measurement_data.csv")
 
   return measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, Source, measdata
 end

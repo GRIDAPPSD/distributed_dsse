@@ -1,5 +1,7 @@
 #!/usr/bin/env julia
 
+test_dir = "test_13assets_lf"
+
 println("Started, before using statements")
 using ADNLPModels, NLPModelsIpopt
 using CSV
@@ -11,7 +13,7 @@ function parse_measurements()
   nodename_nodeidx_map = Dict()
   nodeidx_nodename_map = Dict()
   nnode = 0
-  for row in CSV.File("test/nodelist.csv", header=false)
+  for row in CSV.File(test_dir*"/nodelist.csv", header=false)
     nnode += 1
     nodename_nodeidx_map[row[1]] = nnode
     nodeidx_nodename_map[nnode] = row[1]
@@ -19,7 +21,7 @@ function parse_measurements()
   println("    Total number of nodes: $(nnode)")
 
   # figure out how many total measurements we have for allocating arrays
-  nmeas = (open("test/measurements.csv") |> readlines |> length) -1
+  nmeas = (open(test_dir*"/measurements.csv") |> readlines |> length) -1
   println("    Total number of measurements: $(nmeas)")
 
   vi_zidxs = Vector{Int64}()
@@ -30,7 +32,7 @@ function parse_measurements()
   rmat = Array{Float64}(undef, nmeas)
 
   zidx = 0
-  for row in CSV.File("test/measurements.csv")
+  for row in CSV.File(test_dir*"/measurements.csv")
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
     supported = false
@@ -63,7 +65,7 @@ function parse_measurements()
   println("    Number of Qi measurements: $(length(Qi_zidxs))")
 
   Ybus = Dict()
-  for row in CSV.File("test/ysparse.csv")
+  for row in CSV.File(test_dir*"/ysparse.csv")
     if !haskey(Ybus, row[1])
       Ybus[row[1]] = Dict()
     end
@@ -193,7 +195,7 @@ end
   # MATLAB FPI solver solution for the 13assets_lf physical units test case 
   target_solution = [2283.0834341589052201,2372.3754031263556499,2294.3624201193733825,2282.8985641419048989,2372.3484716871507771,2294.2190783191026640,2363.2752997397833497,2339.3809287173489793,2361.2315564450464080,2336.8924815796344774,2280.4987463440056672,2293.2337589443063735,2336.1909734539181045,2374.6161345817708934,2341.6688920407827936,2318.8179479999921568,2372.7592114495701026,2324.3778369779993227,2273.0063120857521426,2401.4131985750614149,2401.5134749777644174,2401.4247885560480427,2273.3742005452431840,2373.6699522389599224,2290.0518874935391977,2292.1405804143196292,2331.8752568378727119,2372.3604465902581069,2338.7013584566648206,2283.0836188232692621,2372.3755788026765003,2294.3625947736331909,66395.3000000000174623,66395.2999999999883585,66395.2999999999883585,2401.7203456675565576,2401.7385699396149903,2401.7264235380616810,265.5451524017101974,271.0012011180325544,267.0795161521803038,-0.0487008581519078,-2.1110176173411861,2.0538786105973394,-0.0487212231106527,-2.1110183324034084,2.0538614270470061,-2.1089698863920869,2.0717849099347547,-2.1096690990054103,2.0722047197955713,-0.0487015503792061,2.0523279899930449,-0.0233251756205417,-2.1072557600226691,2.0715461941386337,-0.0316480734366957,-2.1084606908889381,2.0649449934416371,-0.0483711665236682,-0.0000521372337437,-2.0944418330827110,2.0943289314156139,-0.0500893376253135,-2.1118074287584010,2.0547562138638016,2.0503481067922014,-0.0239046059606650,-2.1076067335546274,2.0713291512159540,-0.0487008796533500,-2.1110176441267274,2.0538785857932265,0.5235987755982987,-1.5707963267948968,2.6179938779914944,-0.0000273642134291,-2.0944166946151137,2.0943655274575939,-0.0303208337814400,-2.1119850227417052,2.0668226042254458]
 
-  for row in CSV.File("test/measurement_data.csv")
+  for row in CSV.File(test_dir*"/measurement_data.csv")
     println("\n================================================================================\n")
 
     # This logic assumes that the order of measurements (columns in a row)

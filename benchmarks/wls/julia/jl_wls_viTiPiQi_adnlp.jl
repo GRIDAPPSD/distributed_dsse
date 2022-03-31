@@ -1,5 +1,7 @@
 #!/usr/bin/env julia
 
+test_dir = "test_13assets_lf"
+
 println("Started, before using statements")
 using ADNLPModels, NLPModelsIpopt
 using CSV
@@ -10,14 +12,14 @@ function parse_measurements()
   println("    In parse_measurements function")
   nodename_nodeidx_map = Dict()
   nnode = 0
-  for row in CSV.File("test/nodelist.csv", header=false)
+  for row in CSV.File(test_dir*"/nodelist.csv", header=false)
     nnode += 1
     nodename_nodeidx_map[row[1]] = nnode
   end
   println("    Total number of nodes: $(nnode)")
 
   # figure out how many total measurements we have for allocating arrays
-  nmeas = (open("test/measurements.csv") |> readlines |> length) -1
+  nmeas = (open(test_dir*"/measurements.csv") |> readlines |> length) -1
   println("    Total number of measurements: $(nmeas)")
 
   vi_zidxs = Vector{Int64}()
@@ -28,7 +30,7 @@ function parse_measurements()
   rmat = Array{Float64}(undef, nmeas)
 
   zidx = 0
-  for row in CSV.File("test/measurements.csv")
+  for row in CSV.File(test_dir*"/measurements.csv")
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
     supported = false
@@ -61,7 +63,7 @@ function parse_measurements()
   println("    Number of Qi measurements: $(length(Qi_zidxs))")
 
   Ybus = Dict()
-  for row in CSV.File("test/ysparse.csv")
+  for row in CSV.File(test_dir*"/ysparse.csv")
     if !haskey(Ybus, row[1])
       Ybus[row[1]] = Dict()
     end
@@ -166,7 +168,7 @@ end
   # MATLAB FPI solver solution for the 3p6 test case 
   #target_solution = [1.0, 1.0, 1.0, 0.9712111193225086, 0.9410836694466717, 0.9223652753951702, 0.0, -2.0943951023931957, 2.0943951023931953, -0.0375155389352858, -2.1362637169183625, 2.0491375942741321] 
 
-  for row in CSV.File("test/measurement_data.csv")
+  for row in CSV.File(test_dir*"/measurement_data.csv")
     println("\n================================================================================\n")
 
     # This logic assumes that the order of measurements (columns in a row)
