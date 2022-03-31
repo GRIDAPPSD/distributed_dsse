@@ -383,36 +383,50 @@ for zone = 0:5
   measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], source_nodeidxs[zone], nodename[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
 end
 
-Sharednodes = Dict()
+#Sharednodes = Dict()
 Sharedmeas = Dict()
+SharedmeasAlt = Dict()
 for (key, value) in shared_nodenames
   zone = value[1][1]
   inode = value[1][2]
-  if !haskey(Sharednodes, zone)
-    Sharednodes[zone] = Dict()
+  if !haskey(Sharedmeas, zone)
+    #Sharednodes[zone] = Dict()
     Sharedmeas[zone] = Dict()
+    SharedmeasAlt[zone] = Dict()
   end
-  Sharednodes[zone][inode] = value[2]
+  #Sharednodes[zone][inode] = value[2]
 
   for imeas in shared_nodeidx_measidx2_map[zone][inode]
     Sharedmeas[zone][imeas] = value[2]
+    if zone == 0
+      SharedmeasAlt[zone][imeas] = value[2]
+    else
+      SharedmeasAlt[zone][imeas] = value[1]
+    end
   end
 
   zone = value[2][1]
   inode = value[2][2]
-  if !haskey(Sharednodes, zone)
-    Sharednodes[zone] = Dict()
+  if !haskey(Sharedmeas, zone)
+    #Sharednodes[zone] = Dict()
     Sharedmeas[zone] = Dict()
+    SharedmeasAlt[zone] = Dict()
   end
-  Sharednodes[zone][inode] = value[1]
+  #Sharednodes[zone][inode] = value[1]
 
   for imeas in shared_nodeidx_measidx2_map[zone][inode]
     Sharedmeas[zone][imeas] = value[1]
+    if zone == 0
+      SharedmeasAlt[zone][imeas] = value[1]
+    else
+      SharedmeasAlt[zone][imeas] = value[2]
+    end
   end
 end
 println("Shared nodenames dictionary: $(shared_nodenames)\n")
-println("Sharednodes dictionary: $(Sharednodes)\n")
+#println("Sharednodes dictionary: $(Sharednodes)\n")
 println("Sharedmeas dictionary: $(Sharedmeas)\n")
+println("SharedmeasAlt dictionary: $(SharedmeasAlt)\n")
 
 println("Done parsing input files, start defining optimization problem...")
 
@@ -487,6 +501,7 @@ for row = 1:1 # first timestamp only
   end
 
   # exchange shared node values updating zvec measurement values
+  #for (zonedest, Zonemeas) in SharedmeasAlt
   for (zonedest, Zonemeas) in Sharedmeas
     for (measdest, source) in Zonemeas
       #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
