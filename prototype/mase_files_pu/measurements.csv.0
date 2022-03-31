@@ -1,0 +1,14 @@
+ztype,zid,znode1,znode2,zval,zsig,zpseudo,znomval
+vi,vi_1,LOAD_EQ2,LOAD_EQ2,1,0.01,1,1
+Pi,Pi_1,LOAD_EQ2,LOAD_EQ2,0,0.05,0,0
+Pi,Pi_2,RA1,RA1,0,1,0,0
+Pi,Pi_3,RA2,RA2,0,1.2,0,0
+Pi,Pi_4,RA3,RA3,0,1,0,0
+Pi,Pi_5,RA4,RA4,0,1.2,0,0
+Pi,Pi_6,RA5,RA5,0,1,0,0
+Qi,Qi_1,LOAD_EQ2,LOAD_EQ2,0,0.025,0,0
+Qi,Qi_2,RA1,RA1,0,0.5,0,0
+Qi,Qi_3,RA2,RA2,0,0.6,0,0
+Qi,Qi_4,RA3,RA3,0,0.5,0,0
+Qi,Qi_5,RA4,RA4,0,0.6,0,0
+Qi,Qi_6,RA5,RA5,0,0.5,0,0
