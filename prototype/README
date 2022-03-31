@@ -1,0 +1,35 @@
+
+The Multi-Area State Estimation (MASE) prototype includes the following files
+and directories:
+
+wls_estimate.jl: starting point for prototype taken form the JuMP WLS state
+                 estimation formulation in the benchmark/wls/julia directory
+                 of this repository
+
+test_13assets_lf: directory containing IEEE 13 node circuit assets test case
+                  formulated for load flow problems used for wls_estimate.jl
+
+mase_proto.jl: first version that does per zone estimates with some improperly
+               conceived data exchange between first and second estimates
+
+mase_proto_S.jl: better data exchange by computing the S vector after the
+                 first estimates inorder to update the zvec measurement values
+                 before the second estimates
+
+mase_proto_SM.jl: adds new measurements to each shared node per zone so there
+                  is a vi, Pi, and Qi measurement for all of them and then
+                  includes these measurements in the data exchange between
+                  the first and second estimates
+
+mase_files_pu: directory containing per-unit input files for the published test
+               case for all mase_proto*.jl versions
+
+To run a prototype version, start the julia environment from a terminal shell.
+From the julia command prompt, enter, for example:
+
+include("mase_proto_SM.jl")
+
+This will run the prototype code, caching it and modules referenced in memory
+for much faster execution if the code is re-run by running the include command
+again.
+
