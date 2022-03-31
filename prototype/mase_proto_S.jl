@@ -4,6 +4,7 @@ using Ipopt
 using CSV
 using SparseArrays
 
+test_dir = "mase_files_pu"
 
 function get_input(zone, shared_nodenames)
   println("    Reading input files for zone: $(zone)")
@@ -11,7 +12,7 @@ function get_input(zone, shared_nodenames)
   nodename = Vector{String}()
 
   inode = 0
-  for row in CSV.File(string("mase_files/nodelist.csv.", zone), header=false)
+  for row in CSV.File(string(test_dir, "/nodelist.csv.", zone), header=false)
     inode += 1
     nodename_nodeidx_map[row[1]] = inode
     push!(nodename, row[1])
@@ -28,7 +29,7 @@ function get_input(zone, shared_nodenames)
   rmat = Vector{Float64}()
 
   imeas = 0
-  for row in CSV.File(string("mase_files/measurements.csv.", zone))
+  for row in CSV.File(string(test_dir, "/measurements.csv.", zone))
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
     stype = row[1]
@@ -83,7 +84,7 @@ function get_input(zone, shared_nodenames)
   #YbusG = spzeros(Float64, inode, inode)
   #YbusB = spzeros(Float64, inode, inode)
   ibus = 0
-  for row in CSV.File(string("mase_files/ysparse.csv.", zone))
+  for row in CSV.File(string(test_dir, "/ysparse.csv.", zone))
     if !haskey(Ybus, row[1])
       Ybus[row[1]] = Dict()
     end
@@ -97,7 +98,7 @@ function get_input(zone, shared_nodenames)
 
   Vnom = Dict()
   inom = 0
-  for row in CSV.File(string("mase_files/vnom.csv.", zone))
+  for row in CSV.File(string(test_dir, "/vnom.csv.", zone))
     if row[1] in keys(nodename_nodeidx_map)
       Vnom[nodename_nodeidx_map[row[1]]] = (row[2], row[3])
       inom += 1
@@ -106,14 +107,14 @@ function get_input(zone, shared_nodenames)
   println("    Vnom number of elements: $(inom)")
 
   source_nodeidxs = Vector{Int64}()
-  for row in CSV.File(string("mase_files/sourcebus.csv.", zone), header=false)
+  for row in CSV.File(string(test_dir, "/sourcebus.csv.", zone), header=false)
     if row[1] in keys(nodename_nodeidx_map)
       append!(source_nodeidxs, nodename_nodeidx_map[row[1]])
     end
   end
   println("    Source node indices: $(source_nodeidxs)\n")
 
-  measdata = CSV.File(string("mase_files/measurement_data.csv.", zone))
+  measdata = CSV.File(string(test_dir, "/measurement_data.csv.", zone))
 
   return measidxs, measidx_nodeidx_map, rmat, Ybus, Ybusp, Vnom, source_nodeidxs, nodename, shared_nodeidx_measidx_map, measdata
 end
@@ -265,7 +266,7 @@ function estimate(nlp, v, T, nodename, zone)
   println("\n*** Solution for zone $(zone):")
   inode = 0
   toterr = 0.0
-  for row in CSV.File(string("mase_files/result_data.csv.", zone), header=false)
+  for row in CSV.File(string(test_dir, "/result_data.csv.", zone), header=false)
     inode += 1
     expected = row[2]
     solution = value.(v[inode])
@@ -288,7 +289,7 @@ end
 println("Start parsing input files...")
 
 shared_nodenames = Dict()
-for row in CSV.File("mase_files/sharednodelist.csv", header=false)
+for row in CSV.File(test_dir*"/sharednodelist.csv", header=false)
   shared_nodenames[row[1]] = []
 end
 
