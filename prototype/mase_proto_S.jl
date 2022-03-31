@@ -368,6 +368,7 @@ for row = 1:1 # first timestamp only
      measurement = measdata[zone][row]
      for imeas in 1:length(measurement)-1
        set_value(zvec[zone][imeas], measurement[imeas+1])
+       println("*** zone $(zone) zvec initalization for measurement $(imeas): $(measurement[imeas+1])")
      end
      #println("*** Timestamp with measurements: $(measurement)\n")
 #     end
@@ -429,15 +430,19 @@ for row = 1:1 # first timestamp only
       if "vi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["vi"]
         println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
         set_value(zvec[zonedest][measdest], value.(v[source[1]][source[2]]))
+        println("*** zone $(zonedest) zvec vi exchange for measurement $(measdest): $(value.(v[source[1]][source[2]]))")
       elseif "Ti" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Ti"]
         println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T value: $(value.(T[source[1]][source[2]]))")
         set_value(zvec[zonedest][measdest], value.(T[source[1]][source[2]]))
+        println("*** zone $(zonedest) zvec Ti exchange for measurement $(measdest): $(value.(T[source[1]][source[2]]))")
       elseif "Pi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Pi"]
         println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S real value: $(-1*real(S[source[1]][source[2]]))")
         set_value(zvec[zonedest][measdest], -1*real(S[source[1]][source[2]]))
+        println("*** zone $(zonedest) zvec Pi exchange for measurement $(measdest): $(-1*real(S[source[1]][source[2]]))")
       elseif "Qi" in keys(measidxs[zonedest]) && measdest in measidxs[zonedest]["Qi"]
         println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S imag value: $(-1*imag(S[source[1]][source[2]]))")
         set_value(zvec[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
+        println("*** zone $(zonedest) zvec Qi exchange for measurement $(measdest): $(-1*imag(S[source[1]][source[2]]))")
       end
     end
   end
