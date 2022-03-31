@@ -28,12 +28,11 @@ function get_input(zone, shared_nodenames)
   measidxs2 = Dict()
   measidx1_nodeidx_map = Dict()
   measidx2_nodeidx_map = Dict()
-  shared_nodeidx_measidx1_map = Dict()
   shared_nodeidx_measidx2_map = Dict()
   rmat1 = Vector{Float64}()
   rmat2 = Vector{Float64}()
 
-  imeas = 0
+  imeas1 = 0
   for row in CSV.File(string("mase_files/measurements.csv.", zone))
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
@@ -42,28 +41,73 @@ function get_input(zone, shared_nodenames)
       measidxs1[stype] = Vector{Int64}()
       measidxs2[stype] = Vector{Int64}()
     end
-    imeas += 1
-    append!(measidxs1[stype], imeas)
-    append!(measidxs2[stype], imeas)
+    imeas1 += 1
+    append!(measidxs1[stype], imeas1)
+    append!(measidxs2[stype], imeas1)
 
-    measidx1_nodeidx_map[imeas] = measidx2_nodeidx_map[imeas] = nodename_nodeidx_map[row[3]]
+    measidx1_nodeidx_map[imeas1] = measidx2_nodeidx_map[imeas1] = nodename_nodeidx_map[row[3]]
 
     append!(rmat1, row[6]^2)
     append!(rmat2, row[6]^2)
 
     if row[3] in keys(shared_nodenames)
       nodeidx = nodename_nodeidx_map[row[3]]
-      if !(nodeidx in keys(shared_nodeidx_measidx1_map))
-        shared_nodeidx_measidx1_map[nodeidx] = Vector{Int64}()
+      if !(nodeidx in keys(shared_nodeidx_measidx2_map))
         shared_nodeidx_measidx2_map[nodeidx] = Vector{Int64}()
       end
 
-      append!(shared_nodeidx_measidx1_map[nodeidx], imeas)
-      append!(shared_nodeidx_measidx2_map[nodeidx], imeas)
+      append!(shared_nodeidx_measidx2_map[nodeidx], imeas1)
     end
   end
 
-  println("    Total number of measurements: $(imeas)")
+  imeas2 = imeas1
+
+  # for the 2nd estimates, make sure there are vi, Pi, and Qi measurements
+  # for each shared node.  If there aren't add any that are missing
+  for (nodeidx, measidx_vec) in shared_nodeidx_measidx2_map
+    viFlag = false
+    PiFlag = false
+    QiFlag = false
+    for measidx in measidx_vec
+      if measidx in measidxs2["vi"]
+        viFlag = true
+      elseif measidx in measidxs2["Pi"]
+        PiFlag = true
+      elseif measidx in measidxs2["Qi"]
+        QiFlag = true
+      end
+    end
+
+    if !viFlag
+      println("***missing vi measurement for node index: $(nodeidx)")
+      # create new measurement
+      imeas2 += 1
+      append!(measidxs2["vi"], imeas2)
+      measidx2_nodeidx_map[imeas2] = nodeidx
+      append!(measidx_vec, imeas2)
+      append!(rmat2, 0.01^2)
+    end
+    if !PiFlag
+      println("***missing Pi measurement for node index: $(nodeidx)")
+      # create new measurement
+      imeas2 += 1
+      append!(measidxs2["Pi"], imeas2)
+      measidx2_nodeidx_map[imeas2] = nodeidx
+      append!(measidx_vec, imeas2)
+      append!(rmat2, 1.0^2)
+    end
+    if !QiFlag
+      println("***missing Qi measurement for node index: $(nodeidx)")
+      # create new measurement
+      imeas2 += 1
+      append!(measidxs2["Qi"], imeas2)
+      measidx2_nodeidx_map[imeas2] = nodeidx
+      append!(measidx_vec, imeas2)
+      append!(rmat2, 0.5^2)
+    end
+  end
+
+  println("    Total number of 1st estimate measurements: $(imeas1)")
   if "vi" in keys(measidxs1)
     println("    Number of vi measurements: $(length(measidxs1["vi"]))")
     println("    vi measurement indices: $(measidxs1["vi"])")
@@ -81,8 +125,26 @@ function get_input(zone, shared_nodenames)
     println("    Qi measurement indices: $(measidxs1["Qi"])")
   end
 
-  println("    Measurement node index map: $(measidx1_nodeidx_map)")
-  println("    Shared node measurement index map: $(shared_nodeidx_measidx1_map)")
+  println("    Total number of 2nd estimate measurements: $(imeas2)")
+  if "vi" in keys(measidxs2)
+    println("    Number of vi measurements: $(length(measidxs2["vi"]))")
+    println("    vi measurement indices: $(measidxs2["vi"])")
+  end
+  if "Ti" in keys(measidxs2)
+    println("    Number of Ti measurements: $(length(measidxs2["Ti"]))")
+    println("    Ti measurement indices: $(measidxs2["Ti"])")
+  end
+  if "Pi" in keys(measidxs2)
+    println("    Number of Pi measurements: $(length(measidxs2["Pi"]))")
+    println("    Pi measurement indices: $(measidxs2["Pi"])")
+  end
+  if "Qi" in keys(measidxs2)
+    println("    Number of Qi measurements: $(length(measidxs2["Qi"]))")
+    println("    Qi measurement indices: $(measidxs2["Qi"])")
+  end
+
+  println("    Measurement node index map: $(measidx2_nodeidx_map)")
+  println("    Shared node measurement index map: $(shared_nodeidx_measidx2_map)")
 
   # TODO: objective function works on dictionaries rather than potentially
   # faster Julia SparseArray data types. Commented out code below populates
@@ -126,7 +188,7 @@ function get_input(zone, shared_nodenames)
 
   measdata = CSV.File(string("mase_files/measurement_data.csv.", zone))
 
-  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, source_nodeidxs, nodename, shared_nodeidx_measidx1_map, shared_nodeidx_measidx2_map, measdata
+  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, source_nodeidxs, nodename, shared_nodeidx_measidx2_map, measdata
 end
 
 
@@ -314,12 +376,11 @@ Ybusp = Dict()
 Vnom = Dict()
 source_nodeidxs = Dict()
 nodename = Dict()
-shared_nodeidx_measidx1_map = Dict()
 shared_nodeidx_measidx2_map = Dict()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], source_nodeidxs[zone], nodename[zone], shared_nodeidx_measidx1_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
+  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], source_nodeidxs[zone], nodename[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
 end
 
 Sharednodes = Dict()
@@ -333,7 +394,7 @@ for (key, value) in shared_nodenames
   end
   Sharednodes[zone][inode] = value[2]
 
-  for imeas in shared_nodeidx_measidx1_map[zone][inode]
+  for imeas in shared_nodeidx_measidx2_map[zone][inode]
     Sharedmeas[zone][imeas] = value[2]
   end
 
@@ -345,7 +406,7 @@ for (key, value) in shared_nodenames
   end
   Sharednodes[zone][inode] = value[1]
 
-  for imeas in shared_nodeidx_measidx1_map[zone][inode]
+  for imeas in shared_nodeidx_measidx2_map[zone][inode]
     Sharedmeas[zone][imeas] = value[1]
   end
 end
@@ -386,6 +447,7 @@ for row = 1:1 # first timestamp only
     measurement = measdata[zone][row]
     for imeas in 1:length(measurement)-1
       set_value(zvec1[zone][imeas], measurement[imeas+1])
+      set_value(zvec2[zone][imeas], measurement[imeas+1])
     end
     #println("*** Timestamp with measurements: $(measurement)\n")
   end
@@ -427,17 +489,17 @@ for row = 1:1 # first timestamp only
   # exchange shared node values updating zvec measurement values
   for (zonedest, Zonemeas) in Sharedmeas
     for (measdest, source) in Zonemeas
-      #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
-      if "vi" in keys(measidxs1[zonedest]) && measdest in measidxs1[zonedest]["vi"]
-        println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v value: $(value.(v[source[1]][source[2]]))")
+      #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
+      if "vi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["vi"]
+        println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], value.(v1[source[1]][source[2]]))
-      elseif "Ti" in keys(measidxs1[zonedest]) && measdest in measidxs1[zonedest]["Ti"]
-        println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T value: $(value.(T[source[1]][source[2]]))")
+      elseif "Ti" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Ti"]
+        println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T1 value: $(value.(T1[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], value.(T1[source[1]][source[2]]))
-      elseif "Pi" in keys(measidxs1[zonedest]) && measdest in measidxs1[zonedest]["Pi"]
+      elseif "Pi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Pi"]
         println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S real value: $(-1*real(S[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], -1*real(S[source[1]][source[2]]))
-      elseif "Qi" in keys(measidxs1[zonedest]) && measdest in measidxs1[zonedest]["Qi"]
+      elseif "Qi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Qi"]
         println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S imag value: $(-1*imag(S[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
       end
