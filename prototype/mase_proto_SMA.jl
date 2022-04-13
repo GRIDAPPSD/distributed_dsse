@@ -357,6 +357,30 @@ function estimate(nlp, v, T, nodename, zone)
 end
 
 
+function buildZonegraph(parzone, shared_nodenames, Zonenodes, Zonegraph)
+  println("buildZonegraph parent zone: $(parzone)")
+  for node in Zonenodes[parzone]
+    for (zone, nodeidx) in shared_nodenames[node]
+      if zone != parzone && !(zone in keys(Zonegraph))
+        if !(parzone in keys(Zonegraph))
+          Zonegraph[parzone] = Vector{Int64}()
+        end
+        println("buildZonegraph Zonegraph[$(parzone)] add child zone: $(zone)")
+        append!(Zonegraph[parzone], zone)
+      end
+    end
+  end
+
+  if parzone in keys(Zonegraph)
+    println("buildZonegraph finished Zonegraph[$(parzone)]: $(Zonegraph[parzone])")
+
+    for zone in Zonegraph[parzone]
+      buildZonegraph(zone, shared_nodenames, Zonenodes, Zonegraph)
+    end
+  end
+end
+
+
 # Main
 
 println("Start parsing input files...")
@@ -531,6 +555,33 @@ for row = 1:1 # first timestamp only
     println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
     estimate(nlp2[zone], v2[zone], T2[zone], nodename[zone], zone)
   end
+
+  # start of Angle Reference code
+
+  # first task is determining the zone ordering
+
+  # build a graph of the zones linked to other zones by shared nodes
+  # shared_nodenames has the info needed to build this
+  println("shared_nodenames: $(shared_nodenames)")
+
+  # for each zone create a list of shared nodes
+  Zonenodes = Dict()
+  for (node, zonepairs) in shared_nodenames
+    for zonepair in zonepairs
+      zone = zonepair[1]
+      if !(zone in keys(Zonenodes))
+        Zonenodes[zone] = Vector{String}()
+      end
+      push!(Zonenodes[zone], node)
+    end
+  end
+  println("Shared nodes per zone, Zonenodes: $(Zonenodes)")
+
+  Zonegraph = Dict()
+  # invoke recursive function to build the graph of connected zones
+  # pass the starting zone and recursion will build the rest
+  buildZonegraph(0, shared_nodenames, Zonenodes, Zonegraph)
+  println("Connected zones graph, Zonegraph: $(Zonegraph)")
 
 end
 
