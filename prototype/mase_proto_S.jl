@@ -289,7 +289,7 @@ end
 println("Start parsing input files...")
 
 shared_nodenames = Dict()
-for row in CSV.File(test_dir*"/sharednodelist.csv", header=false)
+for row in CSV.File(test_dir*"/sharednodes.csv", header=false)
   shared_nodenames[row[1]] = []
 end
 
