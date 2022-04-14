@@ -560,14 +560,29 @@ for row = 1:1 # first timestamp only
   # start of Angle Reference code
 
   # first task is determining the zone ordering
-#ZZZZ
-#  source_nodeidxs = Vector{Int64}()
-#  for row in CSV.File(string(test_dir, "/sourcebus.csv.", zone), header=false)
-#    if row[1] in keys(nodename_nodeidx_map)
-#      append!(source_nodeidxs, nodename_nodeidx_map[row[1]])
-#    end
-#  end
-#  println("    Source node indices: $(source_nodeidxs)\n")
+
+  # determine the system reference zone from which zone source nodes are in
+  sysref_flag = false
+  sysref_zone = 0
+  for row in CSV.File(string(test_dir, "/sourcenodes.csv"), header=false)
+    node = row[1]
+    for zone = 0:5
+      if node in nodename[zone]
+        if sysref_flag
+          println("WARNING: found source nodes in multiple zones")
+        else
+          sysref_flag = true
+          sysref_zone = zone
+        end
+      end
+    end
+  end
+
+  if sysref_flag
+    println("Found system reference zone: $(sysref_zone)")
+  else
+    println("WARNING: system reference zone not found based on source nodes")
+  end
 
   # build a graph of the zones linked to other zones by shared nodes
   # shared_nodenames has the info needed to build this
@@ -588,14 +603,15 @@ for row = 1:1 # first timestamp only
 
   Zonegraph = Dict()
   # invoke recursive function to build the graph of connected zones
-  # pass the starting zone and recursion will build the rest
-  buildZonegraph(0, shared_nodenames, Zonenodes, Zonegraph)
+  # pass the system reference zone and recursion will build the rest
+  buildZonegraph(sysref_zone, shared_nodenames, Zonenodes, Zonegraph)
   println("Connected zones graph, Zonegraph: $(Zonegraph)")
 
   Zoneorder = Vector{Int64}()
-  append!(Zoneorder, 0)
-  # traverse the zone graph recursively to build the zone ordering
-  buildZoneorder(0, Zonegraph, Zoneorder)
+  append!(Zoneorder, sysref_zone) # system reference zone is always first
+  # traverse the zone graph recursively starting from the system reference
+  # zone to build the full zone ordering
+  buildZoneorder(sysref_zone, Zonegraph, Zoneorder)
   println("Zone ordering, Zoneorder: $(Zoneorder)")
 
 end
