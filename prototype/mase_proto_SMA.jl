@@ -179,17 +179,9 @@ function get_input(zone, shared_nodenames)
   end
   println("    Vnom number of elements: $(inom)")
 
-  source_nodeidxs = Vector{Int64}()
-  for row in CSV.File(string(test_dir, "/sourcebus.csv.", zone), header=false)
-    if row[1] in keys(nodename_nodeidx_map)
-      append!(source_nodeidxs, nodename_nodeidx_map[row[1]])
-    end
-  end
-  println("    Source node indices: $(source_nodeidxs)\n")
-
   measdata = CSV.File(string(test_dir, "/measurement_data.csv.", zone))
 
-  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, source_nodeidxs, nodename, shared_nodeidx_measidx2_map, measdata
+  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodename, shared_nodeidx_measidx2_map, measdata
 end
 
 
@@ -204,7 +196,6 @@ end
 #    indexed by node numbers with both lower and upper diagonal values populated
 #  - Vnom: nominal voltages, dictionary indexed by node numbers with each
 #    element as a tuple with magnitude first and angle (degrees) second
-#  - source_nodeidxs: source bus node indices as a vector
 #  - measdata: streaming measurement data for populating zvec
 
 # State as of Feb 28:
@@ -222,7 +213,7 @@ end
 #   * With only the +/-90 degree inequality angle constraint, it will optimize
 #     with any tolerance value
 
-function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, source_nodeidxs)
+function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
   nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>1000,"linear_solver"=>"mumps"))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer)) # tol default to 1e-8 and acceptable_tol defaults to 1e-6
@@ -252,10 +243,6 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, source_
   for i = 1:nnode
     if i in keys(Vnom)
       set_start_value.(v[i], Vnom[i][1])
-# TODO: do we want this source bus magnitude equality constraint?
-#      if i in source_nodeidxs
-#        @NLconstraint(nlp, v[i] == Vnom[i][1])
-#      end
     end
   end
 
@@ -268,14 +255,6 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom, source_
     if i in keys(Vnom)
       start = Vnom[i][2]
       set_start_value.(T[i], deg2rad(start))
-# TODO: do we want this source bus angle equality constraint?
-#      if i in source_nodeidxs
-#        @NLconstraint(nlp, T[i] == deg2rad(start))
-#      else
-#        # if this angle constraint is broken up into two NLconstraints, one
-#        # <= and one >=, bad things will happen with JuMP including crashes
-#        @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
-#     end
       @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
     end
   end
@@ -422,13 +401,12 @@ rmat2 = Dict()
 Ybus = Dict()
 Ybusp = Dict()
 Vnom = Dict()
-source_nodeidxs = Dict()
 nodename = Dict()
 shared_nodeidx_measidx2_map = Dict()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], source_nodeidxs[zone], nodename[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
+  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodename[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
 end
 
 #Sharednodes = Dict()
@@ -488,8 +466,8 @@ T1 = Dict()
 T2 = Dict()
 
 for zone = 0:5
-  nlp1[zone], zvec1[zone], v1[zone], T1[zone] = setup_estimate(measidxs1[zone], measidx1_nodeidx_map[zone], rmat1[zone], Ybus[zone], Vnom[zone], source_nodeidxs[zone])
-  nlp2[zone], zvec2[zone], v2[zone], T2[zone] = setup_estimate(measidxs2[zone], measidx2_nodeidx_map[zone], rmat2[zone], Ybus[zone], Vnom[zone], source_nodeidxs[zone])
+  nlp1[zone], zvec1[zone], v1[zone], T1[zone] = setup_estimate(measidxs1[zone], measidx1_nodeidx_map[zone], rmat1[zone], Ybus[zone], Vnom[zone])
+  nlp2[zone], zvec2[zone], v2[zone], T2[zone] = setup_estimate(measidxs2[zone], measidx2_nodeidx_map[zone], rmat2[zone], Ybus[zone], Vnom[zone])
 end
 
 println("\nDone defining optimization problem, start solving it...")
@@ -582,6 +560,14 @@ for row = 1:1 # first timestamp only
   # start of Angle Reference code
 
   # first task is determining the zone ordering
+#ZZZZ
+#  source_nodeidxs = Vector{Int64}()
+#  for row in CSV.File(string(test_dir, "/sourcebus.csv.", zone), header=false)
+#    if row[1] in keys(nodename_nodeidx_map)
+#      append!(source_nodeidxs, nodename_nodeidx_map[row[1]])
+#    end
+#  end
+#  println("    Source node indices: $(source_nodeidxs)\n")
 
   # build a graph of the zones linked to other zones by shared nodes
   # shared_nodenames has the info needed to build this
