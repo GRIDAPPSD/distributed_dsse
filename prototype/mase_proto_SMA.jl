@@ -359,23 +359,46 @@ end
 
 function buildZonegraph(parzone, shared_nodenames, Zonenodes, Zonegraph)
   println("buildZonegraph parent zone: $(parzone)")
+  #fake = 0
   for node in Zonenodes[parzone]
     for (zone, nodeidx) in shared_nodenames[node]
       if zone != parzone && !(zone in keys(Zonegraph))
         if !(parzone in keys(Zonegraph))
-          Zonegraph[parzone] = Vector{Int64}()
+          Zonegraph[parzone] = Array{Tuple{Int64,Int64},1}()
         end
+
+        buildZonegraph(zone, shared_nodenames, Zonenodes, Zonegraph)
+
         println("buildZonegraph Zonegraph[$(parzone)] add child zone: $(zone)")
-        append!(Zonegraph[parzone], zone)
+        if zone in keys(Zonegraph)
+          push!(Zonegraph[parzone], (zone, length(Zonegraph[zone])))
+        else
+          push!(Zonegraph[parzone], (zone, 0))
+          #fake += 1
+          #TODO given fake counts, see if we can sort on that tuple element
+          # or if we need to go to a different data structure besides an array
+          # of tuples to allow sorting
+          #push!(Zonegraph[parzone], (zone, fake))
+        end
       end
     end
   end
+end
 
+
+function buildZoneorder(parzone, Zonegraph, Zoneorder)
+  println("buildZoneorder parent zone: $(parzone)")
   if parzone in keys(Zonegraph)
-    println("buildZonegraph finished Zonegraph[$(parzone)]: $(Zonegraph[parzone])")
-
-    for zone in Zonegraph[parzone]
-      buildZonegraph(zone, shared_nodenames, Zonenodes, Zonegraph)
+    # order children zones by the count of children each of those have
+    order = sort(Zonegraph[parzone], by=x->x[2], rev=true)
+    println("buildZoneorder sorted: $(order)")
+    # first, add all the children zones in their order
+    for (zone, cnt) in order
+      append!(Zoneorder, zone)
+    end
+    # second, traverse those children zones and do the same recursive ordering
+    for (zone, cnt) in order
+      buildZoneorder(zone, Zonegraph, Zoneorder)
     end
   end
 end
@@ -582,6 +605,12 @@ for row = 1:1 # first timestamp only
   # pass the starting zone and recursion will build the rest
   buildZonegraph(0, shared_nodenames, Zonenodes, Zonegraph)
   println("Connected zones graph, Zonegraph: $(Zonegraph)")
+
+  Zoneorder = Vector{Int64}()
+  append!(Zoneorder, 0)
+  # traverse the zone graph recursively to build the zone ordering
+  buildZoneorder(0, Zonegraph, Zoneorder)
+  println("Zone ordering, Zoneorder: $(Zoneorder)")
 
 end
 
