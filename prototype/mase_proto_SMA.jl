@@ -564,6 +564,7 @@ for row = 1:1 # first timestamp only
   # determine the system reference zone from which zone source nodes are in
   sysref_flag = false
   sysref_zone = 0
+  sysref_node = ""
   for row in CSV.File(string(test_dir, "/sourcenodes.csv"), header=false)
     node = row[1]
     for zone = 0:5
@@ -573,15 +574,16 @@ for row = 1:1 # first timestamp only
         else
           sysref_flag = true
           sysref_zone = zone
+          sysref_node = node
         end
       end
     end
   end
 
   if sysref_flag
-    println("Found system reference zone: $(sysref_zone)")
+    println("Found system reference node: $(sysref_node), in zone: $(sysref_zone)")
   else
-    println("WARNING: system reference zone not found based on source nodes")
+    println("WARNING: system reference node and zone not found based on source nodes")
   end
 
   # build a graph of the zones linked to other zones by shared nodes
@@ -612,7 +614,54 @@ for row = 1:1 # first timestamp only
   # traverse the zone graph recursively starting from the system reference
   # zone to build the full zone ordering
   buildZoneorder(sysref_zone, Zonegraph, Zoneorder)
-  println("Zone ordering, Zoneorder: $(Zoneorder)")
+  println("Zone ordering vector, Zoneorder: $(Zoneorder)")
+
+  # create a dictionary to quickly lookup order by zone
+  iorder = 0
+  ZoneorderDict = Dict()
+  # iterate over Zoneorder backwards so the higher priority zones
+  # get larger values
+  for zone in Iterators.Reverse(Zoneorder)
+    iorder += 1
+    ZoneorderDict[zone] = iorder
+  end
+  println("Zone ordering dictionary, ZoneorderDict: $(ZoneorderDict)")
+
+  # second task is determining the zone reference nodes
+
+  Zonerefnode = Dict()
+  for zone = 0:5
+    if zone == sysref_zone
+      # for the system reference zone, the zone reference node is always
+      # the system reference node
+      Zonerefnode[zone] = sysref_node
+    else
+      # determine what the shared nodes are for this zone to find the one
+      # that is the zone reference node
+      if length(Zonenodes[zone]) == 1
+        # if there is just a single shared node, it is always the zone ref node
+        Zonerefnode[zone] = Zonenodes[zone][1]
+      else
+        # check each shared node to see which has the highest zone order for
+        # the other zones where it is shared
+        max_priority = 0
+        max_node = ""
+        for node in Zonenodes[zone]
+          # find other zone that node is shared with
+          for (sharedzone, nodeidx) in shared_nodenames[node]
+            if sharedzone!=zone && ZoneorderDict[sharedzone]>max_priority
+              max_priority = ZoneorderDict[sharedzone]
+              max_node = node
+            end
+          end
+        end
+        Zonerefnode[zone] = max_node
+      end
+    end
+  end
+  println("Zone reference nodes, Zonerefnode: $(Zonerefnode)")
+
+  # third task is passing angle references
 
 end
 
