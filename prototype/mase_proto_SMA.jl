@@ -185,6 +185,199 @@ function get_input(zone, shared_nodenames)
 end
 
 
+function buildZonegraph(parzone, shared_nodenames, Zonenodes, Zonegraph)
+  println("buildZonegraph parent zone: $(parzone)")
+  #fake = 0
+  for node in Zonenodes[parzone]
+    for (zone, nodeidx) in shared_nodenames[node]
+      if zone != parzone && !(zone in keys(Zonegraph))
+        if !(parzone in keys(Zonegraph))
+          Zonegraph[parzone] = Array{Tuple{Int64,Int64},1}()
+        end
+
+        buildZonegraph(zone, shared_nodenames, Zonenodes, Zonegraph)
+
+        println("buildZonegraph Zonegraph[$(parzone)] add child zone: $(zone)")
+        if zone in keys(Zonegraph)
+          push!(Zonegraph[parzone], (zone, length(Zonegraph[zone])))
+        else
+          push!(Zonegraph[parzone], (zone, 0))
+          #fake += 1
+          #TODO given fake counts, see if we can sort on that tuple element
+          # or if we need to go to a different data structure besides an array
+          # of tuples to allow sorting
+          #push!(Zonegraph[parzone], (zone, fake))
+        end
+      end
+    end
+  end
+end
+
+
+function buildZoneorder(parzone, Zonegraph, Zoneorder)
+  println("buildZoneorder parent zone: $(parzone)")
+  if parzone in keys(Zonegraph)
+    # order children zones by the count of children each of those have
+    order = sort(Zonegraph[parzone], by=x->x[2], rev=true)
+    println("buildZoneorder sorted: $(order)")
+    # first, add all the children zones in their order
+    for (zone, cnt) in order
+      append!(Zoneorder, zone)
+    end
+    # second, traverse those children zones and do the same recursive ordering
+    for (zone, cnt) in order
+      buildZoneorder(zone, Zonegraph, Zoneorder)
+    end
+  end
+end
+
+
+function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
+  # first task is determining the zone ordering
+
+  # determine the system reference zone from which zone source nodes are in
+  sysref_flag = false
+  sysref_zone = 0
+  sysref_node = ""
+  for row in CSV.File(string(test_dir, "/sourcenodes.csv"), header=false)
+    node = row[1]
+    for zone = 0:5
+      if node in keys(nodename_nodeidx_map[zone])
+        if sysref_flag
+          println("WARNING: found source nodes in multiple zones")
+        else
+          sysref_flag = true
+          sysref_zone = zone
+          sysref_node = node
+        end
+      end
+    end
+  end
+
+  if sysref_flag
+    println("Found system reference node: $(sysref_node), in zone: $(sysref_zone)")
+  else
+    println("WARNING: system reference node and zone not found based on source nodes")
+  end
+
+  # build a graph of the zones linked to other zones by shared nodes
+  # shared_nodenames has the info needed to build this
+  println("shared_nodenames: $(shared_nodenames)")
+
+  # for each zone create a list of shared nodes
+  Zonenodes = Dict()
+  for (node, zonepairs) in shared_nodenames
+    for zonepair in zonepairs
+      zone = zonepair[1]
+      if !(zone in keys(Zonenodes))
+        Zonenodes[zone] = Vector{String}()
+      end
+      push!(Zonenodes[zone], node)
+    end
+  end
+  println("Shared nodes per zone, Zonenodes: $(Zonenodes)")
+
+  Zonegraph = Dict()
+  # invoke recursive function to build the graph of connected zones
+  # pass the system reference zone and recursion will build the rest
+  buildZonegraph(sysref_zone, shared_nodenames, Zonenodes, Zonegraph)
+  println("Connected zones graph, Zonegraph: $(Zonegraph)")
+
+  Zoneorder = Vector{Int64}()
+  append!(Zoneorder, sysref_zone) # system reference zone is always first
+  # traverse the zone graph recursively starting from the system reference
+  # zone to build the full zone ordering
+  buildZoneorder(sysref_zone, Zonegraph, Zoneorder)
+  println("Zone ordering vector, Zoneorder: $(Zoneorder)")
+
+  # create a dictionary to quickly lookup order by zone
+  iorder = 0
+  ZoneorderDict = Dict()
+  # iterate over Zoneorder backwards so the higher priority zones
+  # get larger values
+  for zone in Iterators.Reverse(Zoneorder)
+    iorder += 1
+    ZoneorderDict[zone] = iorder
+  end
+  println("Zone ordering dictionary, ZoneorderDict: $(ZoneorderDict)")
+
+  # second task is determining the zone reference nodes
+
+  Zonerefnode = Dict()
+  for zone = 0:5
+    if zone == sysref_zone
+      # for the system reference zone, the zone reference node is always
+      # the system reference node
+      Zonerefnode[zone] = sysref_node
+    else
+      # determine what the shared nodes are for this zone to find the one
+      # that is the zone reference node
+      if length(Zonenodes[zone]) == 1
+        # if there is just a single shared node, it is always the zone ref node
+        Zonerefnode[zone] = Zonenodes[zone][1]
+      else
+        # check each shared node to see which has the highest zone order for
+        # the other zones where it is shared
+        max_priority = 0
+        max_node = ""
+        for node in Zonenodes[zone]
+          # find other zone that node is shared with
+          for (sharedzone, nodeidx) in shared_nodenames[node]
+            if sharedzone!=zone && ZoneorderDict[sharedzone]>max_priority
+              max_priority = ZoneorderDict[sharedzone]
+              max_node = node
+            end
+          end
+        end
+        Zonerefnode[zone] = max_node
+      end
+    end
+  end
+  println("Zone reference nodes, Zonerefnode: $(Zonerefnode)")
+
+  return Zoneorder, Zonerefnode
+end
+
+
+function perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map, nodename)
+  # store the updated angles after reference angle passing in a new data
+  # structure because I can't update the JuMP T2 solution vector
+  T2_updated = Dict()
+
+  last_ref_angle = 0.0
+  for zone in Zoneorder
+    # declare the vector for the updated angles
+    T2_updated[zone] = Vector{Float64}()
+
+    # get the reference node and index for the zone
+    ref_node = Zonerefnode[zone]
+    ref_idx = nodename_nodeidx_map[zone][ref_node]
+
+    # get the JuMP solution angle for the reference node
+    current_ref_angle = value.(T2[zone][ref_idx])
+
+    # calculate the difference or adjustment needed for each angle based
+    # on the reference angle value for the last zone in the ordering and
+    # the current reference angle
+    diff_angle = last_ref_angle - current_ref_angle
+    println("zone $(zone), ref_node $(nodename[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
+
+    # setup for the next zone in the ordering by saving this reference angle
+    # in order to calculate the next adjustment
+    last_ref_angle = current_ref_angle
+
+    # update every angle for the zone based on this adjustment factor
+    for inode in 1:length(nodename[zone])
+      updated_angle = value.(T2[zone][inode]) + diff_angle
+      append!(T2_updated[zone], updated_angle)
+      println("zone $(zone), node $(nodename[zone][inode]), original angle: $(value.(T2[zone][inode])), updated angle: $(T2_updated[zone][inode])")
+    end
+  end
+
+  return T2_updated
+end
+
+
 # Input:
 #  - measidxs: Measurement indices for each type of measurement (vi,Ti,Pi,Qi),
 #    dictionary indexed by measurement type with value as vector of measurement
@@ -336,53 +529,6 @@ function estimate(nlp, v, T, nodename, zone)
 end
 
 
-function buildZonegraph(parzone, shared_nodenames, Zonenodes, Zonegraph)
-  println("buildZonegraph parent zone: $(parzone)")
-  #fake = 0
-  for node in Zonenodes[parzone]
-    for (zone, nodeidx) in shared_nodenames[node]
-      if zone != parzone && !(zone in keys(Zonegraph))
-        if !(parzone in keys(Zonegraph))
-          Zonegraph[parzone] = Array{Tuple{Int64,Int64},1}()
-        end
-
-        buildZonegraph(zone, shared_nodenames, Zonenodes, Zonegraph)
-
-        println("buildZonegraph Zonegraph[$(parzone)] add child zone: $(zone)")
-        if zone in keys(Zonegraph)
-          push!(Zonegraph[parzone], (zone, length(Zonegraph[zone])))
-        else
-          push!(Zonegraph[parzone], (zone, 0))
-          #fake += 1
-          #TODO given fake counts, see if we can sort on that tuple element
-          # or if we need to go to a different data structure besides an array
-          # of tuples to allow sorting
-          #push!(Zonegraph[parzone], (zone, fake))
-        end
-      end
-    end
-  end
-end
-
-
-function buildZoneorder(parzone, Zonegraph, Zoneorder)
-  println("buildZoneorder parent zone: $(parzone)")
-  if parzone in keys(Zonegraph)
-    # order children zones by the count of children each of those have
-    order = sort(Zonegraph[parzone], by=x->x[2], rev=true)
-    println("buildZoneorder sorted: $(order)")
-    # first, add all the children zones in their order
-    for (zone, cnt) in order
-      append!(Zoneorder, zone)
-    end
-    # second, traverse those children zones and do the same recursive ordering
-    for (zone, cnt) in order
-      buildZoneorder(zone, Zonegraph, Zoneorder)
-    end
-  end
-end
-
-
 # Main
 
 println("Start parsing input files...")
@@ -454,6 +600,9 @@ println("Shared nodenames dictionary: $(shared_nodenames)\n")
 #println("Sharednodes dictionary: $(Sharednodes)\n")
 println("Sharedmeas dictionary: $(Sharedmeas)\n")
 println("SharedmeasAlt dictionary: $(SharedmeasAlt)\n")
+
+# do the data structure initialization  for reference angle passing
+Zoneorder, Zonerefnode = setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
 
 println("Done parsing input files, start defining optimization problem...")
 
@@ -558,145 +707,8 @@ for row = 1:1 # first timestamp only
     estimate(nlp2[zone], v2[zone], T2[zone], nodename[zone], zone)
   end
 
-  # start of Angle Reference code
-
-  # first task is determining the zone ordering
-
-  # determine the system reference zone from which zone source nodes are in
-  sysref_flag = false
-  sysref_zone = 0
-  sysref_node = ""
-  for row in CSV.File(string(test_dir, "/sourcenodes.csv"), header=false)
-    node = row[1]
-    for zone = 0:5
-      if node in keys(nodename_nodeidx_map[zone])
-        if sysref_flag
-          println("WARNING: found source nodes in multiple zones")
-        else
-          sysref_flag = true
-          sysref_zone = zone
-          sysref_node = node
-        end
-      end
-    end
-  end
-
-  if sysref_flag
-    println("Found system reference node: $(sysref_node), in zone: $(sysref_zone)")
-  else
-    println("WARNING: system reference node and zone not found based on source nodes")
-  end
-
-  # build a graph of the zones linked to other zones by shared nodes
-  # shared_nodenames has the info needed to build this
-  println("shared_nodenames: $(shared_nodenames)")
-
-  # for each zone create a list of shared nodes
-  Zonenodes = Dict()
-  for (node, zonepairs) in shared_nodenames
-    for zonepair in zonepairs
-      zone = zonepair[1]
-      if !(zone in keys(Zonenodes))
-        Zonenodes[zone] = Vector{String}()
-      end
-      push!(Zonenodes[zone], node)
-    end
-  end
-  println("Shared nodes per zone, Zonenodes: $(Zonenodes)")
-
-  Zonegraph = Dict()
-  # invoke recursive function to build the graph of connected zones
-  # pass the system reference zone and recursion will build the rest
-  buildZonegraph(sysref_zone, shared_nodenames, Zonenodes, Zonegraph)
-  println("Connected zones graph, Zonegraph: $(Zonegraph)")
-
-  Zoneorder = Vector{Int64}()
-  append!(Zoneorder, sysref_zone) # system reference zone is always first
-  # traverse the zone graph recursively starting from the system reference
-  # zone to build the full zone ordering
-  buildZoneorder(sysref_zone, Zonegraph, Zoneorder)
-  println("Zone ordering vector, Zoneorder: $(Zoneorder)")
-
-  # create a dictionary to quickly lookup order by zone
-  iorder = 0
-  ZoneorderDict = Dict()
-  # iterate over Zoneorder backwards so the higher priority zones
-  # get larger values
-  for zone in Iterators.Reverse(Zoneorder)
-    iorder += 1
-    ZoneorderDict[zone] = iorder
-  end
-  println("Zone ordering dictionary, ZoneorderDict: $(ZoneorderDict)")
-
-  # second task is determining the zone reference nodes
-
-  Zonerefnode = Dict()
-  for zone = 0:5
-    if zone == sysref_zone
-      # for the system reference zone, the zone reference node is always
-      # the system reference node
-      Zonerefnode[zone] = sysref_node
-    else
-      # determine what the shared nodes are for this zone to find the one
-      # that is the zone reference node
-      if length(Zonenodes[zone]) == 1
-        # if there is just a single shared node, it is always the zone ref node
-        Zonerefnode[zone] = Zonenodes[zone][1]
-      else
-        # check each shared node to see which has the highest zone order for
-        # the other zones where it is shared
-        max_priority = 0
-        max_node = ""
-        for node in Zonenodes[zone]
-          # find other zone that node is shared with
-          for (sharedzone, nodeidx) in shared_nodenames[node]
-            if sharedzone!=zone && ZoneorderDict[sharedzone]>max_priority
-              max_priority = ZoneorderDict[sharedzone]
-              max_node = node
-            end
-          end
-        end
-        Zonerefnode[zone] = max_node
-      end
-    end
-  end
-  println("Zone reference nodes, Zonerefnode: $(Zonerefnode)")
-
-  # third/final task is passing angle references
-
-  # store the updated angles after reference angle passing in a new data
-  # structure because I can't update the JuMP T2 solution vector
-  T2_updated = Dict()
-
-  last_ref_angle = 0.0
-  for zone in Zoneorder
-    # declare the vector for the updated angles
-    T2_updated[zone] = Vector{Float64}()
-
-    # get the reference node and index for the zone
-    ref_node = Zonerefnode[zone]
-    ref_idx = nodename_nodeidx_map[zone][ref_node]
-
-    # get the JuMP solution angle for the reference node
-    current_ref_angle = value.(T2[zone][ref_idx])
-
-    # calculate the difference or adjustment needed for each angle based
-    # on the reference angle value for the last zone in the ordering and
-    # the current reference angle
-    diff_angle = last_ref_angle - current_ref_angle
-    println("zone $(zone), ref_node $(nodename[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
-
-    # setup for the next zone in the ordering by saving this reference angle
-    # in order to calculate the next adjustment
-    last_ref_angle = current_ref_angle
-
-    # update every angle for the zone based on this adjustment factor
-    for inode in 1:length(nodename[zone])
-      updated_angle = value.(T2[zone][inode]) + diff_angle
-      append!(T2_updated[zone], updated_angle)
-      println("zone $(zone), node $(nodename[zone][inode]), original angle: $(value.(T2[zone][inode])), updated angle: $(T2_updated[zone][inode])")
-    end
-  end
+  # perform reference angle passing to get the final angle results
+  T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map, nodename)
 
 end
 
