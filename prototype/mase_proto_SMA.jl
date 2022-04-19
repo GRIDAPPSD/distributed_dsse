@@ -9,13 +9,13 @@ test_dir = "mase_files_pu"
 function get_input(zone, shared_nodenames)
   println("    Reading input files for zone: $(zone)")
   nodename_nodeidx_map = Dict()
-  nodename = Vector{String}()
+  nodenames = Vector{String}()
 
   inode = 0
   for row in CSV.File(string(test_dir, "/nodelist.csv.", zone), header=false)
     inode += 1
     nodename_nodeidx_map[row[1]] = inode
-    push!(nodename, row[1])
+    push!(nodenames, row[1])
 
     if row[1] in keys(shared_nodenames)
       push!(shared_nodenames[row[1]], (zone, inode))
@@ -181,7 +181,7 @@ function get_input(zone, shared_nodenames)
 
   measdata = CSV.File(string(test_dir, "/measurement_data.csv.", zone))
 
-  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodename, nodename_nodeidx_map, shared_nodeidx_measidx2_map, measdata
+  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodenames, nodename_nodeidx_map, shared_nodeidx_measidx2_map, measdata
 end
 
 
@@ -232,6 +232,58 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
   println("SharedmeasAlt dictionary: $(SharedmeasAlt)\n")
 
   return Sharedmeas, SharedmeasAlt
+end
+
+
+function perform_data_sharing(nodenames, Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
+  # for Pi and Qi measurement data exchange, need to compute:
+  #   S = V.(Ybus x V)*
+  #   where S is complex and the real component is the corresponding Pi value
+  #   and the imaginary component is the corresponding Qi value
+  #   V is the complex solution vector from the first state estimate where the
+  #   real component values are the v magnitude values and the imaginary
+  #   component values are the T angle values
+  #   The "." operation is element-wise multiplication
+  #   The "x" operation is regular matrix multiplication
+  #   The "*" operation is complex conjugate
+  #   Ybus will be created as a dense matrix for the initial implementation
+  S = Dict()
+  for zone = 0:5
+    nnode = length(nodenames[zone]) # get number of nodes from # of nodenames elements
+
+    V = Array{ComplexF64}(undef, nnode)
+    for inode = 1:nnode
+      V[inode] = value.(v1[zone][inode]) * exp(value.(T1[zone][inode])*1im)
+    end
+
+    S[zone] = V .* conj(Ybusp[zone] * V)
+    println("\nZone: $(zone), nnode: $(nnode), S: $(S[zone])")
+  end
+
+  # exchange shared node values updating zvec measurement values
+  #for (zonedest, Zonemeas) in SharedmeasAlt
+  for (zonedest, Zonemeas) in Sharedmeas
+    for (measdest, source) in Zonemeas
+      #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
+      if "vi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["vi"]
+        println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
+        set_value(zvec2[zonedest][measdest], value.(v1[source[1]][source[2]]))
+        println("*** zone $(zonedest) zvec2 vi exchange for measurement $(measdest): $(value.(v1[source[1]][source[2]]))")
+      elseif "Ti" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Ti"]
+        println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T1 value: $(value.(T1[source[1]][source[2]]))")
+        set_value(zvec2[zonedest][measdest], value.(T1[source[1]][source[2]]))
+        println("*** zone $(zonedest) zvec2 Ti exchange for measurement $(measdest): $(value.(T1[source[1]][source[2]]))")
+      elseif "Pi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Pi"]
+        println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S real value: $(-1*real(S[source[1]][source[2]]))")
+        set_value(zvec2[zonedest][measdest], -1*real(S[source[1]][source[2]]))
+        println("*** zone $(zonedest) zvec2 Pi exchange for measurement $(measdest): $(-1*real(S[source[1]][source[2]]))")
+      elseif "Qi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Qi"]
+        println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S imag value: $(-1*imag(S[source[1]][source[2]]))")
+        set_value(zvec2[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
+        println("*** zone $(zonedest) zvec2 Qi exchange for measurement $(measdest): $(-1*imag(S[source[1]][source[2]]))")
+      end
+    end
+  end
 end
 
 
@@ -289,7 +341,7 @@ function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
   sysref_flag = false
   sysref_zone = 0
   sysref_node = ""
-  for row in CSV.File(string(test_dir, "/sourcenodes.csv"), header=false)
+  for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
     node = row[1]
     for zone = 0:5
       if node in keys(nodename_nodeidx_map[zone])
@@ -389,7 +441,7 @@ function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
 end
 
 
-function perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map, nodename)
+function perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map, nodenames)
   # store the updated angles after reference angle passing in a new data
   # structure because I can't update the JuMP T2 solution vector
   T2_updated = Dict()
@@ -410,17 +462,17 @@ function perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map,
     # on the reference angle value for the last zone in the ordering and
     # the current reference angle
     diff_angle = last_ref_angle - current_ref_angle
-    println("zone $(zone), ref_node $(nodename[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
+    println("zone $(zone), ref_node $(nodenames[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
 
     # setup for the next zone in the ordering by saving this reference angle
     # in order to calculate the next adjustment
     last_ref_angle = current_ref_angle
 
     # update every angle for the zone based on this adjustment factor
-    for inode in 1:length(nodename[zone])
+    for inode in 1:length(nodenames[zone])
       updated_angle = value.(T2[zone][inode]) + diff_angle
       append!(T2_updated[zone], updated_angle)
-      println("zone $(zone), node $(nodename[zone][inode]), original angle: $(value.(T2[zone][inode])), updated angle: $(T2_updated[zone][inode])")
+      println("zone $(zone), node $(nodenames[zone][inode]), original angle: $(value.(T2[zone][inode])), updated angle: $(T2_updated[zone][inode])")
     end
   end
 
@@ -483,9 +535,9 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
   # finding the correct solution for any model
 
   @variable(nlp,v[1:nnode])
-  for i = 1:nnode
-    if i in keys(Vnom)
-      set_start_value.(v[i], Vnom[i][1])
+  for inode = 1:nnode
+    if inode in keys(Vnom)
+      set_start_value.(v[inode], Vnom[inode][1])
     end
   end
 
@@ -494,11 +546,11 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
   # correct solution for any model
 
   @variable(nlp,T[1:nnode])
-  for i = 1:nnode
-    if i in keys(Vnom)
-      start = Vnom[i][2]
-      set_start_value.(T[i], deg2rad(start))
-      @NLconstraint(nlp, deg2rad(start-90.0) <= T[i] <= deg2rad(start+90.0))
+  for inode = 1:nnode
+    if inode in keys(Vnom)
+      start = Vnom[inode][2]
+      set_start_value.(T[inode], deg2rad(start))
+      @NLconstraint(nlp, deg2rad(start-90.0) <= T[inode] <= deg2rad(start+90.0))
     end
   end
 
@@ -551,7 +603,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
 end
 
 
-function estimate(nlp, v, T, nodename, zone)
+function estimate(nlp, v, T, nodenames, zone)
   # call solver given everything is setup coming in
   @time optimize!(nlp)
   solution_summary(nlp, verbose=true)
@@ -567,14 +619,14 @@ function estimate(nlp, v, T, nodename, zone)
     solution = value.(v[inode])
     pererr = 100.0 * abs(solution - expected)/expected
     toterr += pererr
-    println("$(nodename[inode]) v exp: $(expected), sol: $(solution), %err: $(pererr)")
+    println("$(nodenames[inode]) v exp: $(expected), sol: $(solution), %err: $(pererr)")
   end
   avgerr = toterr/inode
   println("*** Average %err zone $(zone): $(avgerr)")
 
-  #nnode = length(nodename)
+  #nnode = length(nodenames)
   #for inode in 1:nnode
-  #  println("$(nodename[inode]) v exp: XXX, sol: $(value.(v[inode])), %err: XXX")
+  #  println("$(nodenames[inode]) v exp: XXX, sol: $(value.(v[inode])), %err: XXX")
   #end
 end
 
@@ -597,13 +649,13 @@ rmat2 = Dict()
 Ybus = Dict()
 Ybusp = Dict()
 Vnom = Dict()
-nodename = Dict()
+nodenames = Dict()
 nodename_nodeidx_map = Dict()
 shared_nodeidx_measidx2_map = Dict()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodename[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
+  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
 end
 
 Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
@@ -654,68 +706,20 @@ for row = 1:1 # first timestamp only
   for zone = 0:5
     println("\n================================================================================")
     println("1st optimization for timestamp #$(row), zone: $(zone)\n")
-    estimate(nlp1[zone], v1[zone], T1[zone], nodename[zone], zone)
+    estimate(nlp1[zone], v1[zone], T1[zone], nodenames[zone], zone)
   end
 
-  # DATA EXCHANGE
-  # for Pi and Qi measurement data exchange, need to compute:
-  #   S = V.(Ybus x V)*
-  #   where S is complex and the real component is the corresponding Pi value
-  #   and the imaginary component is the corresponding Qi value
-  #   V is the complex solution vector from the first state estimate where the
-  #   real component values are the v magnitude values and the imaginary
-  #   component values are the T angle values
-  #   The "." operation is element-wise multiplication
-  #   The "x" operation is regular matrix multiplication
-  #   The "*" operation is complex conjugate
-  #   Ybus will be created as a dense matrix for the initial implementation
-  S = Dict()
-  for zone = 0:5
-    nnode = length(Vnom[zone]) # get number of nodes from # of Vnom elements
-
-    V = Array{ComplexF64}(undef, nnode)
-    for i = 1:nnode
-      V[i] = value.(v1[zone][i]) * exp(value.(T1[zone][i])*1im)
-    end
-
-    S[zone] = V .* conj(Ybusp[zone] * V)
-    println("\nZone: $(zone), nnode: $(nnode), S: $(S[zone])")
-  end
-
-  # exchange shared node values updating zvec measurement values
-  #for (zonedest, Zonemeas) in SharedmeasAlt
-  for (zonedest, Zonemeas) in Sharedmeas
-    for (measdest, source) in Zonemeas
-      #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
-      if "vi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["vi"]
-        println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
-        set_value(zvec2[zonedest][measdest], value.(v1[source[1]][source[2]]))
-        println("*** zone $(zonedest) zvec2 vi exchange for measurement $(measdest): $(value.(v1[source[1]][source[2]]))")
-      elseif "Ti" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Ti"]
-        println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T1 value: $(value.(T1[source[1]][source[2]]))")
-        set_value(zvec2[zonedest][measdest], value.(T1[source[1]][source[2]]))
-        println("*** zone $(zonedest) zvec2 Ti exchange for measurement $(measdest): $(value.(T1[source[1]][source[2]]))")
-      elseif "Pi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Pi"]
-        println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S real value: $(-1*real(S[source[1]][source[2]]))")
-        set_value(zvec2[zonedest][measdest], -1*real(S[source[1]][source[2]]))
-        println("*** zone $(zonedest) zvec2 Pi exchange for measurement $(measdest): $(-1*real(S[source[1]][source[2]]))")
-      elseif "Qi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Qi"]
-        println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S imag value: $(-1*imag(S[source[1]][source[2]]))")
-        set_value(zvec2[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
-        println("*** zone $(zonedest) zvec2 Qi exchange for measurement $(measdest): $(-1*imag(S[source[1]][source[2]]))")
-      end
-    end
-  end
+  perform_data_sharing(nodenames, Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
 
   # second optimization using shared node values
   for zone = 0:5
     println("\n================================================================================")
     println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
-    estimate(nlp2[zone], v2[zone], T2[zone], nodename[zone], zone)
+    estimate(nlp2[zone], v2[zone], T2[zone], nodenames[zone], zone)
   end
 
   # perform reference angle passing to get the final angle results
-  T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map, nodename)
+  T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map, nodenames)
 
 end
 
