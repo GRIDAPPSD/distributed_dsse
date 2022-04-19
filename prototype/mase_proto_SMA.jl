@@ -664,23 +664,37 @@ for row = 1:1 # first timestamp only
 
   # third/final task is passing angle references
 
-  T2_new = Dict()
+  # store the updated angles after reference angle passing in a new data
+  # structure because I can't update the JuMP T2 solution vector
+  T2_updated = Dict()
 
   last_ref_angle = 0.0
   for zone in Zoneorder
-    T2_new[zone] = Vector{Float64}()
+    # declare the vector for the updated angles
+    T2_updated[zone] = Vector{Float64}()
 
+    # get the reference node and index for the zone
     ref_node = Zonerefnode[zone]
     ref_idx = nodename_nodeidx_map[zone][ref_node]
+
+    # get the JuMP solution angle for the reference node
     current_ref_angle = value.(T2[zone][ref_idx])
+
+    # calculate the difference or adjustment needed for each angle based
+    # on the reference angle value for the last zone in the ordering and
+    # the current reference angle
     diff_angle = last_ref_angle - current_ref_angle
     println("zone $(zone), ref_node $(nodename[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
+
+    # setup for the next zone in the ordering by saving this reference angle
+    # in order to calculate the next adjustment
     last_ref_angle = current_ref_angle
 
+    # update every angle for the zone based on this adjustment factor
     for inode in 1:length(nodename[zone])
-      update_angle = value.(T2[zone][inode]) + diff_angle
-      append!(T2_new[zone], update_angle)
-      println("zone $(zone), node $(nodename[zone][inode]), original angle: $(value.(T2[zone][inode])), new angle: $(T2_new[zone][inode])")
+      updated_angle = value.(T2[zone][inode]) + diff_angle
+      append!(T2_updated[zone], updated_angle)
+      println("zone $(zone), node $(nodename[zone][inode]), original angle: $(value.(T2[zone][inode])), updated angle: $(T2_updated[zone][inode])")
     end
   end
 
