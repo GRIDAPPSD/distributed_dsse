@@ -181,7 +181,7 @@ function get_input(zone, shared_nodenames)
 
   measdata = CSV.File(string(test_dir, "/measurement_data.csv.", zone))
 
-  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodename, shared_nodeidx_measidx2_map, measdata
+  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodename, nodename_nodeidx_map, shared_nodeidx_measidx2_map, measdata
 end
 
 
@@ -402,11 +402,12 @@ Ybus = Dict()
 Ybusp = Dict()
 Vnom = Dict()
 nodename = Dict()
+nodename_nodeidx_map = Dict()
 shared_nodeidx_measidx2_map = Dict()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodename[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
+  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodename[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
 end
 
 #Sharednodes = Dict()
@@ -568,7 +569,7 @@ for row = 1:1 # first timestamp only
   for row in CSV.File(string(test_dir, "/sourcenodes.csv"), header=false)
     node = row[1]
     for zone = 0:5
-      if node in nodename[zone]
+      if node in keys(nodename_nodeidx_map[zone])
         if sysref_flag
           println("WARNING: found source nodes in multiple zones")
         else
@@ -661,7 +662,27 @@ for row = 1:1 # first timestamp only
   end
   println("Zone reference nodes, Zonerefnode: $(Zonerefnode)")
 
-  # third task is passing angle references
+  # third/final task is passing angle references
+
+  T2_new = Dict()
+
+  last_ref_angle = 0.0
+  for zone in Zoneorder
+    T2_new[zone] = Vector{Float64}()
+
+    ref_node = Zonerefnode[zone]
+    ref_idx = nodename_nodeidx_map[zone][ref_node]
+    current_ref_angle = value.(T2[zone][ref_idx])
+    diff_angle = last_ref_angle - current_ref_angle
+    println("zone $(zone), ref_node $(nodename[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
+    last_ref_angle = current_ref_angle
+
+    for inode in 1:length(nodename[zone])
+      update_angle = value.(T2[zone][inode]) + diff_angle
+      append!(T2_new[zone], update_angle)
+      println("zone $(zone), node $(nodename[zone][inode]), original angle: $(value.(T2[zone][inode])), new angle: $(T2_new[zone][inode])")
+    end
+  end
 
 end
 
