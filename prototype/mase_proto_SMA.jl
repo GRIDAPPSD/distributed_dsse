@@ -235,7 +235,7 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
 end
 
 
-function perform_data_sharing(nodenames, Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
+function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
   # for Pi and Qi measurement data exchange, need to compute:
   #   S = V.(Ybus x V)*
   #   where S is complex and the real component is the corresponding Pi value
@@ -249,7 +249,7 @@ function perform_data_sharing(nodenames, Ybusp, Sharedmeas, SharedmeasAlt, measi
   #   Ybus will be created as a dense matrix for the initial implementation
   S = Dict()
   for zone = 0:5
-    nnode = length(nodenames[zone]) # get number of nodes from # of nodenames elements
+    nnode = length(v1[zone]) # get number of nodes from # of v1 elements
 
     V = Array{ComplexF64}(undef, nnode)
     for inode = 1:nnode
@@ -684,7 +684,6 @@ println("\nDone defining optimization problem, start solving it...")
 # assume all measurement_data files contain the same number of rows/timestamps
 nrows = length(measdata[0])
 println("number of timestamps to process: $(nrows)")
-nnode = length(Vnom[0])
 
 for row = 1:1 # first timestamp only
 #for row = 1:nrows # all timestamps
@@ -709,9 +708,9 @@ for row = 1:1 # first timestamp only
     estimate(nlp1[zone], v1[zone], T1[zone], nodenames[zone], zone)
   end
 
-  perform_data_sharing(nodenames, Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
+  perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
 
-  # second optimization using shared node values
+  # second optimization after shared node data exchange
   for zone = 0:5
     println("\n================================================================================")
     println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
