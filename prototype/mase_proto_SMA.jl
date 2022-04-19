@@ -185,6 +185,56 @@ function get_input(zone, shared_nodenames)
 end
 
 
+function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
+  #Sharednodes = Dict()
+  Sharedmeas = Dict()
+  SharedmeasAlt = Dict()
+  for (key, value) in shared_nodenames
+    zone = value[1][1]
+    inode = value[1][2]
+    if !haskey(Sharedmeas, zone)
+      #Sharednodes[zone] = Dict()
+      Sharedmeas[zone] = Dict()
+      SharedmeasAlt[zone] = Dict()
+    end
+    #Sharednodes[zone][inode] = value[2]
+
+    for imeas in shared_nodeidx_measidx2_map[zone][inode]
+      Sharedmeas[zone][imeas] = value[2]
+      if zone == 0
+        SharedmeasAlt[zone][imeas] = value[2]
+      else
+        SharedmeasAlt[zone][imeas] = value[1]
+      end
+    end
+
+    zone = value[2][1]
+    inode = value[2][2]
+    if !haskey(Sharedmeas, zone)
+      #Sharednodes[zone] = Dict()
+      Sharedmeas[zone] = Dict()
+      SharedmeasAlt[zone] = Dict()
+    end
+    #Sharednodes[zone][inode] = value[1]
+
+    for imeas in shared_nodeidx_measidx2_map[zone][inode]
+      Sharedmeas[zone][imeas] = value[1]
+      if zone == 0
+        SharedmeasAlt[zone][imeas] = value[1]
+      else
+        SharedmeasAlt[zone][imeas] = value[2]
+      end
+    end
+  end
+  println("Shared nodenames dictionary: $(shared_nodenames)\n")
+  #println("Sharednodes dictionary: $(Sharednodes)\n")
+  println("Sharedmeas dictionary: $(Sharedmeas)\n")
+  println("SharedmeasAlt dictionary: $(SharedmeasAlt)\n")
+
+  return Sharedmeas, SharedmeasAlt
+end
+
+
 function buildZonegraph(parzone, shared_nodenames, Zonenodes, Zonegraph)
   println("buildZonegraph parent zone: $(parzone)")
   #fake = 0
@@ -556,50 +606,7 @@ for zone = 0:5
   measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodename[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
 end
 
-#Sharednodes = Dict()
-Sharedmeas = Dict()
-SharedmeasAlt = Dict()
-for (key, value) in shared_nodenames
-  zone = value[1][1]
-  inode = value[1][2]
-  if !haskey(Sharedmeas, zone)
-    #Sharednodes[zone] = Dict()
-    Sharedmeas[zone] = Dict()
-    SharedmeasAlt[zone] = Dict()
-  end
-  #Sharednodes[zone][inode] = value[2]
-
-  for imeas in shared_nodeidx_measidx2_map[zone][inode]
-    Sharedmeas[zone][imeas] = value[2]
-    if zone == 0
-      SharedmeasAlt[zone][imeas] = value[2]
-    else
-      SharedmeasAlt[zone][imeas] = value[1]
-    end
-  end
-
-  zone = value[2][1]
-  inode = value[2][2]
-  if !haskey(Sharedmeas, zone)
-    #Sharednodes[zone] = Dict()
-    Sharedmeas[zone] = Dict()
-    SharedmeasAlt[zone] = Dict()
-  end
-  #Sharednodes[zone][inode] = value[1]
-
-  for imeas in shared_nodeidx_measidx2_map[zone][inode]
-    Sharedmeas[zone][imeas] = value[1]
-    if zone == 0
-      SharedmeasAlt[zone][imeas] = value[1]
-    else
-      SharedmeasAlt[zone][imeas] = value[2]
-    end
-  end
-end
-println("Shared nodenames dictionary: $(shared_nodenames)\n")
-#println("Sharednodes dictionary: $(Sharednodes)\n")
-println("Sharedmeas dictionary: $(Sharedmeas)\n")
-println("SharedmeasAlt dictionary: $(SharedmeasAlt)\n")
+Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
 
 # do the data structure initialization  for reference angle passing
 Zoneorder, Zonerefnode = setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
