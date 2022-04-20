@@ -603,7 +603,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
 end
 
 
-function estimate(nlp, v, T, nodenames, zone)
+function perform_estimate(nlp, v, T, nodenames, zone)
   # call solver given everything is setup coming in
   @time optimize!(nlp)
   solution_summary(nlp, verbose=true)
@@ -705,7 +705,7 @@ for row = 1:1 # first timestamp only
   for zone = 0:5
     println("\n================================================================================")
     println("1st optimization for timestamp #$(row), zone: $(zone)\n")
-    estimate(nlp1[zone], v1[zone], T1[zone], nodenames[zone], zone)
+    perform_estimate(nlp1[zone], v1[zone], T1[zone], nodenames[zone], zone)
   end
 
   perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
@@ -714,7 +714,7 @@ for row = 1:1 # first timestamp only
   for zone = 0:5
     println("\n================================================================================")
     println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
-    estimate(nlp2[zone], v2[zone], T2[zone], nodenames[zone], zone)
+    perform_estimate(nlp2[zone], v2[zone], T2[zone], nodenames[zone], zone)
   end
 
   # perform reference angle passing to get the final angle results
