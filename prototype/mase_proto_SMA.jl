@@ -603,17 +603,19 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
 end
 
 
-function perform_estimate(nlp, v, T, nodenames, zone)
+function perform_estimate(nlp, v, T)
   # call solver given everything is setup coming in
   @time optimize!(nlp)
   solution_summary(nlp, verbose=true)
-  println("v = $(value.(v))")
-  println("T = $(value.(T))")
+  println("\nSolution v = $(value.(v))")
+  println("\nSolution T = $(value.(T))")
+end
 
-  println("\n*** Solution for zone $(zone):")
+
+function compare_estimate(v, T, nodenames, zone)
   inode = 0
   toterr = 0.0
-  for row in CSV.File(string(test_dir, "/result_data.csv.", zone), header=false)
+  for row in CSV.File(string(test_dir, "/FPI_results_data.csv.", zone), header=false)
     inode += 1
     expected = row[2]
     solution = value.(v[inode])
@@ -705,7 +707,13 @@ for row = 1:1 # first timestamp only
   for zone = 0:5
     println("\n================================================================================")
     println("1st optimization for timestamp #$(row), zone: $(zone)\n")
-    perform_estimate(nlp1[zone], v1[zone], T1[zone], nodenames[zone], zone)
+    perform_estimate(nlp1[zone], v1[zone], T1[zone])
+  end
+
+  for zone = 0:5
+    println("\n================================================================================")
+    println("1st optimization comparison for timestamp #$(row), zone: $(zone)\n")
+    compare_estimate(v1[zone], T1[zone], nodenames[zone], zone)
   end
 
   perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
@@ -714,11 +722,18 @@ for row = 1:1 # first timestamp only
   for zone = 0:5
     println("\n================================================================================")
     println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
-    perform_estimate(nlp2[zone], v2[zone], T2[zone], nodenames[zone], zone)
+    perform_estimate(nlp2[zone], v2[zone], T2[zone])
   end
 
   # perform reference angle passing to get the final angle results
+  println("\n================================================================================")
+  println("Reference angle passing:\n")
   T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map, nodenames)
 
+  for zone = 0:5
+    println("\n================================================================================")
+    println("2nd optimization comparison for timestamp #$(row), zone: $(zone)\n")
+    compare_estimate(v2[zone], T2[zone], nodenames[zone], zone)
+  end
 end
 
