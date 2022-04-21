@@ -612,7 +612,7 @@ function perform_estimate(nlp, v, T)
 end
 
 
-function compare_estimate(v, T, nodenames, zone)
+function compare_estimate_magnitudes(v, nodenames, zone)
   inode = 0
   toterr = 0.0
   for row in CSV.File(string(test_dir, "/FPI_results_data.csv.", zone), header=false)
@@ -624,12 +624,28 @@ function compare_estimate(v, T, nodenames, zone)
     println("$(nodenames[inode]) v exp: $(expected), sol: $(solution), %err: $(pererr)")
   end
   avgerr = toterr/inode
-  println("*** Average %err zone $(zone): $(avgerr)")
+  println("*** Average v %err zone $(zone): $(avgerr)")
+end
 
-  #nnode = length(nodenames)
-  #for inode in 1:nnode
-  #  println("$(nodenames[inode]) v exp: XXX, sol: $(value.(v[inode])), %err: XXX")
-  #end
+
+function compare_estimate_angles(T, nodenames, zone, Vnom)
+  inode = 0
+  toterr = 0.0
+  for row in CSV.File(string(test_dir, "/FPI_results_data.csv.", zone), header=false)
+    inode += 1
+    expected = row[3]
+    solution = T[inode]
+    #solution = value.(T[inode])
+    # hardwired logic for test case 180 degree Vnom angles
+    if Vnom[inode][2] == 180
+      solution -= pi
+    end
+    pererr = 100.0 * abs(solution - expected)/expected
+    toterr += pererr
+    println("$(nodenames[inode]) T exp: $(expected), sol: $(solution), %err: $(pererr)")
+  end
+  avgerr = toterr/inode
+  println("*** Average T %err zone $(zone): $(avgerr)")
 end
 
 
@@ -712,8 +728,8 @@ for row = 1:1 # first timestamp only
 
   for zone = 0:5
     println("\n================================================================================")
-    println("1st optimization comparison for timestamp #$(row), zone: $(zone)\n")
-    compare_estimate(v1[zone], T1[zone], nodenames[zone], zone)
+    println("1st optimization magnitude comparison for timestamp #$(row), zone: $(zone)\n")
+    compare_estimate_magnitudes(v1[zone], nodenames[zone], zone)
   end
 
   perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
@@ -732,8 +748,14 @@ for row = 1:1 # first timestamp only
 
   for zone = 0:5
     println("\n================================================================================")
-    println("2nd optimization comparison for timestamp #$(row), zone: $(zone)\n")
-    compare_estimate(v2[zone], T2[zone], nodenames[zone], zone)
+    println("2nd optimization magnitude comparison for timestamp #$(row), zone: $(zone)\n")
+    compare_estimate_magnitudes(v2[zone], nodenames[zone], zone)
+  end
+
+  for zone = 0:5
+    println("\n================================================================================")
+    println("2nd optimization angle comparison for timestamp #$(row), zone: $(zone)\n")
+    compare_estimate_angles(T2_updated[zone], nodenames[zone], zone, Vnom[zone])
   end
 end
 
