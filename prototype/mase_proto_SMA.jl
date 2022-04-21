@@ -640,7 +640,12 @@ function compare_estimate_angles(T, nodenames, zone, Vnom)
     if Vnom[inode][2] == 180
       solution -= pi
     end
-    pererr = 100.0 * abs(solution - expected)/expected
+    diff = abs(solution - expected)
+    if diff < 1.0e-10
+      pererr = 0.0
+    else
+      pererr = 100.0 * diff/expected
+    end
     toterr += pererr
     println("$(nodenames[inode]) T exp: $(expected), sol: $(solution), %err: $(pererr)")
   end
