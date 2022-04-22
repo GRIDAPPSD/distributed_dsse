@@ -405,43 +405,40 @@ function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
 
   # second task is determining the zone reference nodes
 
-  Zonerefnode = Dict()
+  Zonerefinfo = Dict()
   for zone = 0:5
     if zone == sysref_zone
       # for the system reference zone, the zone reference node is always
       # the system reference node
-      Zonerefnode[zone] = sysref_node
+      Zonerefinfo[zone] = (sysref_node, nothing, nothing)
     else
       # determine what the shared nodes are for this zone to find the one
       # that is the zone reference node
-      if length(Zonenodes[zone]) == 1
-        # if there is just a single shared node, it is always the zone ref node
-        Zonerefnode[zone] = Zonenodes[zone][1]
-      else
-        # check each shared node to see which has the highest zone order for
-        # the other zones where it is shared
-        max_priority = 0
-        max_node = ""
-        for node in Zonenodes[zone]
-          # find other zone that node is shared with
-          for (sharedzone, nodeidx) in shared_nodenames[node]
-            if sharedzone!=zone && ZoneorderDict[sharedzone]>max_priority
-              max_priority = ZoneorderDict[sharedzone]
-              max_node = node
-            end
+      # check each shared node to see which has the highest zone order for
+      # the other zones where it is shared
+      max_priority = 0
+      max_node = max_zone = max_idx = nothing
+      for node in Zonenodes[zone]
+        # find other zone that node is shared with
+        for (shared_zone, shared_idx) in shared_nodenames[node]
+          if shared_zone!=zone && ZoneorderDict[shared_zone]>max_priority
+            max_priority = ZoneorderDict[shared_zone]
+            max_node = node
+            max_zone = shared_zone
+            max_idx = shared_idx
           end
         end
-        Zonerefnode[zone] = max_node
       end
+      Zonerefinfo[zone] = (max_node, max_zone, max_idx)
     end
   end
-  println("Zone reference nodes, Zonerefnode: $(Zonerefnode)")
+  println("Zone reference info, Zonerefinfo: $(Zonerefinfo)")
 
-  return Zoneorder, Zonerefnode
+  return Zoneorder, Zonerefinfo
 end
 
 
-function perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map, nodenames)
+function perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
   # store the updated angles after reference angle passing in a new data
   # structure because I can't update the JuMP T2 solution vector
   T2_updated = Dict()
@@ -452,15 +449,25 @@ function perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map,
     T2_updated[zone] = Vector{Float64}()
 
     # get the reference node and index for the zone
-    ref_node = Zonerefnode[zone]
+    ref_node, shared_zone, shared_idx = Zonerefinfo[zone]
     ref_idx = nodename_nodeidx_map[zone][ref_node]
 
     # get the JuMP solution angle for the reference node
     current_ref_angle = value.(T2[zone][ref_idx])
 
+    if shared_zone == nothing
+      last_ref_angle = 0.0
+    else
+      # the shared_zone/shared_idx pair is the higher order shared zone and
+      # node index for the reference node which is used to calculate the
+      # adjustment needed in the current zone to make the angle values
+      # the same
+      last_ref_angle = T2_updated[shared_zone][shared_idx]
+    end
+
     # calculate the difference or adjustment needed for each angle based
-    # on the reference angle value for the last zone in the ordering and
-    # the current reference angle
+    # on the reference angle value in the higher zone order zone where the
+    # reference node is shared and the current reference angle
     diff_angle = last_ref_angle - current_ref_angle
     println("zone $(zone), ref_node $(nodenames[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
 
@@ -684,7 +691,7 @@ end
 Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
 
 # do the data structure initialization  for reference angle passing
-Zoneorder, Zonerefnode = setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
+Zoneorder, Zonerefinfo = setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
 
 println("Done parsing input files, start defining optimization problem...")
 
@@ -749,7 +756,7 @@ for row = 1:1 # first timestamp only
   # perform reference angle passing to get the final angle results
   println("\n================================================================================")
   println("Reference angle passing:\n")
-  T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefnode, nodename_nodeidx_map, nodenames)
+  T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
 
   for zone = 0:5
     println("\n================================================================================")
