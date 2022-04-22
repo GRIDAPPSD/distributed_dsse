@@ -634,6 +634,7 @@ end
 function compare_estimate_angles(T, nodenames, zone, Vnom)
   inode = 0
   toterr = 0.0
+  span = 2*pi
   for row in CSV.File(string(test_dir, "/FPI_results_data.csv.", zone), header=false)
     inode += 1
     expected = row[3]
@@ -644,17 +645,18 @@ function compare_estimate_angles(T, nodenames, zone, Vnom)
       solution -= pi
     end
     diff = abs(solution - expected)
-    if diff < 1.0e-10
-      # this avoids some numerical issues with very small expected values
-      pererr = 0.0
-    else
-      pererr = 100.0 * abs(diff/expected)
-    end
+    #if diff < 1.0e-10
+    #  # this avoids some numerical issues with very small expected values
+    #  pererr = 0.0
+    #else
+    #  pererr = 100.0 * abs(diff/expected)
+    #end
+    pererr = 100.0 * diff/span
     toterr += pererr
-    println("$(nodenames[inode]) T exp: $(expected), sol: $(solution), %err: $(pererr)")
+    println("$(nodenames[inode]) T exp: $(expected), sol: $(solution), 2*pi span %err: $(pererr)")
   end
   avgerr = toterr/inode
-  println("*** Average T %err zone $(zone): $(avgerr)")
+  println("*** Average T 2*pi span %err zone $(zone): $(avgerr)")
 end
 
 
