@@ -443,12 +443,12 @@ function perform_angle_passing(T, Zoneorder, Zonerefinfo, nodename_nodeidx_map, 
   # structure because I can't update the JuMP T solution vector
   T_updated = Dict()
 
-  last_ref_angle = 0.0
   for zone in Zoneorder
     # declare the vector for the updated angles
     T_updated[zone] = Vector{Float64}()
 
-    # get the reference node and index for the zone
+    # get the reference node and index for the zone along with the shared zone
+    # and node index in that zone for the reference node (stored in Zonerefinfo)
     ref_node, shared_zone, shared_idx = Zonerefinfo[zone]
     ref_idx = nodename_nodeidx_map[zone][ref_node]
 
@@ -652,7 +652,7 @@ function compare_estimate_angles(T, nodenames, zone, Vnom)
       # this avoids some numerical issues with very small expected values
       pererr = 0.0
     else
-      pererr = 100.0 * diff/expected
+      pererr = 100.0 * abs(diff/expected)
     end
     toterr += pererr
     println("$(nodenames[inode]) T exp: $(expected), sol: $(solution), %err: $(pererr)")
