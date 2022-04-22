@@ -471,10 +471,6 @@ function perform_angle_passing(T, Zoneorder, Zonerefinfo, nodename_nodeidx_map, 
     diff_angle = last_ref_angle - current_ref_angle
     println("zone $(zone), ref_node $(nodenames[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
 
-    # setup for the next zone in the ordering by saving this reference angle
-    # in order to calculate the next adjustment
-    last_ref_angle = current_ref_angle
-
     # update every angle for the zone based on this adjustment factor
     for inode in 1:length(nodenames[zone])
       updated_angle = value.(T[zone][inode]) + diff_angle
