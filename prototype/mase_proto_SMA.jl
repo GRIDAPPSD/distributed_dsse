@@ -438,22 +438,22 @@ function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
 end
 
 
-function perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
+function perform_angle_passing(T, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
   # store the updated angles after reference angle passing in a new data
-  # structure because I can't update the JuMP T2 solution vector
-  T2_updated = Dict()
+  # structure because I can't update the JuMP T solution vector
+  T_updated = Dict()
 
   last_ref_angle = 0.0
   for zone in Zoneorder
     # declare the vector for the updated angles
-    T2_updated[zone] = Vector{Float64}()
+    T_updated[zone] = Vector{Float64}()
 
     # get the reference node and index for the zone
     ref_node, shared_zone, shared_idx = Zonerefinfo[zone]
     ref_idx = nodename_nodeidx_map[zone][ref_node]
 
     # get the JuMP solution angle for the reference node
-    current_ref_angle = value.(T2[zone][ref_idx])
+    current_ref_angle = value.(T[zone][ref_idx])
 
     if shared_zone == nothing
       last_ref_angle = 0.0
@@ -462,7 +462,7 @@ function perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map,
       # node index for the reference node which is used to calculate the
       # adjustment needed in the current zone to make the angle values
       # the same
-      last_ref_angle = T2_updated[shared_zone][shared_idx]
+      last_ref_angle = T_updated[shared_zone][shared_idx]
     end
 
     # calculate the difference or adjustment needed for each angle based
@@ -477,13 +477,13 @@ function perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map,
 
     # update every angle for the zone based on this adjustment factor
     for inode in 1:length(nodenames[zone])
-      updated_angle = value.(T2[zone][inode]) + diff_angle
-      append!(T2_updated[zone], updated_angle)
-      println("zone $(zone), node $(nodenames[zone][inode]), original angle: $(value.(T2[zone][inode])), updated angle: $(T2_updated[zone][inode])")
+      updated_angle = value.(T[zone][inode]) + diff_angle
+      append!(T_updated[zone], updated_angle)
+      println("zone $(zone), node $(nodenames[zone][inode]), original angle: $(value.(T[zone][inode])), updated angle: $(T_updated[zone][inode])")
     end
   end
 
-  return T2_updated
+  return T_updated
 end
 
 
@@ -649,6 +649,7 @@ function compare_estimate_angles(T, nodenames, zone, Vnom)
     end
     diff = abs(solution - expected)
     if diff < 1.0e-10
+      # this avoids some numerical issues with very small expected values
       pererr = 0.0
     else
       pererr = 100.0 * diff/expected
@@ -726,7 +727,7 @@ for row = 1:1 # first timestamp only
     for imeas in 1:length(measurement)-1
       set_value(zvec1[zone][imeas], measurement[imeas+1])
       set_value(zvec2[zone][imeas], measurement[imeas+1])
-      println("*** zone $(zone) zvec1 and zvec2 initalization for measurement $(imeas): $(measurement[imeas+1])")
+      #println("*** zone $(zone) zvec1 and zvec2 initalization for measurement $(imeas): $(measurement[imeas+1])")
     end
     #println("*** Timestamp with measurements: $(measurement)\n")
   end
@@ -738,10 +739,21 @@ for row = 1:1 # first timestamp only
     perform_estimate(nlp1[zone], v1[zone], T1[zone])
   end
 
+  # perform reference angle passing to get the final angle results
+  println("\n================================================================================")
+  println("Reference angle passing:\n")
+  T1_updated = perform_angle_passing(T1, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
+
   for zone = 0:5
     println("\n================================================================================")
     println("1st optimization magnitude comparison for timestamp #$(row), zone: $(zone)\n")
     compare_estimate_magnitudes(v1[zone], nodenames[zone], zone)
+  end
+
+  for zone = 0:5
+    println("\n================================================================================")
+    println("1st optimization angle comparison for timestamp #$(row), zone: $(zone)\n")
+    compare_estimate_angles(T1_updated[zone], nodenames[zone], zone, Vnom[zone])
   end
 
   perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
