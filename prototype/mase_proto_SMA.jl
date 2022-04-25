@@ -615,7 +615,22 @@ function perform_estimate(nlp, v, T)
 end
 
 
-function compare_estimate_magnitudes(v, nodenames, zone)
+function compare_estimate_magnitudes(v, nodenames, FPIResults, zone)
+  toterr = 0.0
+  nnode = length(v) # get number of nodes from # of v elements
+  for inode = 1:nnode
+    expected = FPIResults[inode][1]
+    solution = value.(v[inode])
+    pererr = 100.0 * abs(solution - expected)/expected
+    toterr += pererr
+    println("$(nodenames[inode]) v exp: $(expected), sol: $(solution), %err: $(pererr)")
+  end
+  avgerr = toterr/nnode
+  println("*** Average v %err zone $(zone): $(avgerr)")
+end
+
+
+function compare_estimate_magnitudes_old(v, nodenames, zone)
   inode = 0
   toterr = 0.0
   for row in CSV.File(string(test_dir, "/FPI_results_data.csv.", zone), header=false)
@@ -631,7 +646,29 @@ function compare_estimate_magnitudes(v, nodenames, zone)
 end
 
 
-function compare_estimate_angles(T, nodenames, zone, Vnom)
+function compare_estimate_angles(T, nodenames, FPIResults, zone, Vnom)
+  toterr = 0.0
+  span = 2*pi
+  nnode = length(T) # get number of nodes from # of T elements
+  for inode = 1:nnode
+    expected = FPIResults[inode][2]
+    solution = T[inode]
+    #solution = value.(T[inode])
+    # hardwired logic for test case 180 degree Vnom angles
+    if Vnom[inode][2] == 180
+      solution -= pi
+    end
+    diff = abs(solution - expected)
+    pererr = 100.0 * diff/span
+    toterr += pererr
+    println("$(nodenames[inode]) T exp: $(expected), sol: $(solution), 2*pi span %err: $(pererr)")
+  end
+  avgerr = toterr/nnode
+  println("*** Average T 2*pi span %err zone $(zone): $(avgerr)")
+end
+
+
+function compare_estimate_angles_old(T, nodenames, zone, Vnom)
   inode = 0
   toterr = 0.0
   span = 2*pi
@@ -710,12 +747,27 @@ end
 
 println("\nDone defining optimization problem, start solving it...")
 
+FPIResults = Dict()
+
+for zone = 0:5
+  println("reading FPI results for zone: $(zone)")
+  FPIResults[zone] = Dict()
+  for row in CSV.File(string(test_dir, "/t_FPI_results_data.csv.", zone), header=true)
+    timestamp = row[1]
+    FPIResults[zone][timestamp] = Dict()
+    nnode = length(Vnom[zone]) # get number of nodes from # of Vnom elements
+    for inode = 1:nnode
+      FPIResults[zone][timestamp][inode] = (row[2*inode], row[2*inode+1])
+    end
+  end
+end
+
 # assume all measurement_data files contain the same number of rows/timestamps
 nrows = length(measdata[0])
-println("number of timestamps to process: $(nrows)")
+println("number of timestamps to procrss: $(nrows)")
 
-for row = 1:1 # first timestamp only
-#for row = 1:nrows # all timestamps
+#for row = 1:1 # first timestamp only
+for row = 1:nrows # all timestamps
 
   for zone = 0:5
     # This logic assumes that the order of measurement data (columns in a row)
@@ -743,15 +795,17 @@ for row = 1:1 # first timestamp only
   T1_updated = perform_angle_passing(T1, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
 
   for zone = 0:5
+    timestamp = measdata[zone][row][1]
     println("\n================================================================================")
-    println("1st optimization magnitude comparison for timestamp #$(row), zone: $(zone)\n")
-    compare_estimate_magnitudes(v1[zone], nodenames[zone], zone)
+    println("1st optimization magnitude comparison for timestamp $(timestamp), zone: $(zone)\n")
+    compare_estimate_magnitudes(v1[zone], nodenames[zone], FPIResults[zone][timestamp], zone)
   end
 
   for zone = 0:5
+    timestamp = measdata[zone][row][1]
     println("\n================================================================================")
-    println("1st optimization angle comparison for timestamp #$(row), zone: $(zone)\n")
-    compare_estimate_angles(T1_updated[zone], nodenames[zone], zone, Vnom[zone])
+    println("1st optimization angle comparison for timestamp $(timestamp), zone: $(zone)\n")
+    compare_estimate_angles(T1_updated[zone], nodenames[zone], FPIResults[zone][timestamp], zone, Vnom[zone])
   end
 
   perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
@@ -769,15 +823,17 @@ for row = 1:1 # first timestamp only
   T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
 
   for zone = 0:5
+    timestamp = measdata[zone][row][1]
     println("\n================================================================================")
-    println("2nd optimization magnitude comparison for timestamp #$(row), zone: $(zone)\n")
-    compare_estimate_magnitudes(v2[zone], nodenames[zone], zone)
+    println("2nd optimization magnitude comparison for timestamp $(timestamp), zone: $(zone)\n")
+    compare_estimate_magnitudes(v2[zone], nodenames[zone], FPIResults[zone][timestamp], zone)
   end
 
   for zone = 0:5
+    timestamp = measdata[zone][row][1]
     println("\n================================================================================")
-    println("2nd optimization angle comparison for timestamp #$(row), zone: $(zone)\n")
-    compare_estimate_angles(T2_updated[zone], nodenames[zone], zone, Vnom[zone])
+    println("2nd optimization angle comparison for timestamp $(timestamp), zone: $(zone)\n")
+    compare_estimate_angles(T2_updated[zone], nodenames[zone], FPIResults[zone][timestamp], zone, Vnom[zone])
   end
 end
 
