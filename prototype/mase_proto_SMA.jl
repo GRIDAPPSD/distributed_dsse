@@ -887,20 +887,18 @@ for row = 1:nrows # all timestamps
 end
 
 for zone = 0:5
-  nnode = length(Vnom[zone])
-  println("\n2nd optimization magnitude stats for zone: $(zone), # of timestamps: $(ntimestamps):")
-  for inode = 1:nnode
+  println("\n2nd optimization magnitude min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
+  for inode = 1:length(nodenames[zone])
     mean = StatsMagnitude2[zone][inode]["sum"]/ntimestamps
-    println("""  Magnitude diff min, max, mean for $(nodenames[zone][inode]): $(StatsMagnitude2[zone][inode]["min"]), $(StatsMagnitude2[zone][inode]["max"]), $(mean)""")
+    println("""  $(nodenames[zone][inode]): $(StatsMagnitude2[zone][inode]["min"]), $(StatsMagnitude2[zone][inode]["max"]), $(mean)""")
   end
 end
 
 for zone = 0:5
-  nnode = length(Vnom[zone])
-  println("\n2nd optimization angle stats for zone: $(zone), # of timestamps: $(ntimestamps):")
-  for inode = 1:nnode
+  println("\n2nd optimization angle min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
+  for inode = 1:length(nodenames[zone])
     mean = StatsAngle2[zone][inode]["sum"]/ntimestamps
-    println("""  Angle diff min, max, mean for $(nodenames[zone][inode]): $(StatsAngle2[zone][inode]["min"]), $(StatsAngle2[zone][inode]["max"]), $(mean)""")
+    println("""  $(nodenames[zone][inode]): $(StatsAngle2[zone][inode]["min"]), $(StatsAngle2[zone][inode]["max"]), $(mean)""")
   end
 end
 
