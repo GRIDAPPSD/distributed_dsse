@@ -615,13 +615,24 @@ function perform_estimate(nlp, v, T)
 end
 
 
-function compare_estimate_magnitudes(v, nodenames, FPIResults, zone)
+function compare_estimate_magnitudes(v, nodenames, FPIResults, zone, StatsMagnitude)
   toterr = 0.0
   nnode = length(v) # get number of nodes from # of v elements
   for inode = 1:nnode
     expected = FPIResults[inode][1]
     solution = value.(v[inode])
-    pererr = 100.0 * abs(solution - expected)/expected
+    diff = abs(solution - expected)
+
+    if diff < StatsMagnitude[inode]["min"]
+      StatsMagnitude[inode]["min"] = diff
+    end
+    if diff > StatsMagnitude[inode]["max"]
+      StatsMagnitude[inode]["max"] = diff
+    end
+    #StatsMagnitude[inode]["sum"] += diff
+    StatsMagnitude[inode]["sum"] = StatsMagnitude[inode]["sum"] + diff
+
+    pererr = 100.0 * diff/expected
     toterr += pererr
     println("$(nodenames[inode]) v exp: $(expected), sol: $(solution), %err: $(pererr)")
   end
@@ -646,7 +657,7 @@ function compare_estimate_magnitudes_old(v, nodenames, zone)
 end
 
 
-function compare_estimate_angles(T, nodenames, FPIResults, zone, Vnom)
+function compare_estimate_angles(T, nodenames, FPIResults, zone, Vnom, StatsAngle)
   toterr = 0.0
   span = 2*pi
   nnode = length(T) # get number of nodes from # of T elements
@@ -658,7 +669,17 @@ function compare_estimate_angles(T, nodenames, FPIResults, zone, Vnom)
     if Vnom[inode][2] == 180
       solution -= pi
     end
+
     diff = abs(solution - expected)
+    if diff < StatsAngle[inode]["min"]
+      StatsAngle[inode]["min"] = diff
+    end
+    if diff > StatsAngle[inode]["max"]
+      StatsAngle[inode]["max"] = diff
+    end
+    #StatsAngle[inode]["sum"] += diff
+    StatsAngle[inode]["sum"] = StatsAngle[inode]["sum"] + diff
+
     pererr = 100.0 * diff/span
     toterr += pererr
     println("$(nodenames[inode]) T exp: $(expected), sol: $(solution), 2*pi span %err: $(pererr)")
@@ -748,17 +769,43 @@ end
 println("\nDone defining optimization problem, start solving it...")
 
 FPIResults = Dict()
+StatsMagnitude1 = Dict()
+StatsMagnitude2 = Dict()
+StatsAngle1 = Dict()
+StatsAngle2 = Dict()
 
 for zone = 0:5
   println("reading FPI results for zone: $(zone)")
   FPIResults[zone] = Dict()
+  StatsMagnitude1[zone] = Dict()
+  StatsMagnitude2[zone] = Dict()
+  StatsAngle1[zone] = Dict()
+  StatsAngle2[zone] = Dict()
+  nnode = length(Vnom[zone]) # get number of nodes from # of Vnom elements
   for row in CSV.File(string(test_dir, "/t_FPI_results_data.csv.", zone), header=true)
     timestamp = row[1]
     FPIResults[zone][timestamp] = Dict()
-    nnode = length(Vnom[zone]) # get number of nodes from # of Vnom elements
     for inode = 1:nnode
       FPIResults[zone][timestamp][inode] = (row[2*inode], row[2*inode+1])
     end
+  end
+  for inode = 1:nnode
+    StatsMagnitude1[zone][inode] = Dict()
+    StatsMagnitude1[zone][inode]["min"] = typemax(Float64)
+    StatsMagnitude1[zone][inode]["max"] = 0.0
+    StatsMagnitude1[zone][inode]["sum"] = 0.0
+    StatsMagnitude2[zone][inode] = Dict()
+    StatsMagnitude2[zone][inode]["min"] = typemax(Float64)
+    StatsMagnitude2[zone][inode]["max"] = 0.0
+    StatsMagnitude2[zone][inode]["sum"] = 0.0
+    StatsAngle1[zone][inode] = Dict()
+    StatsAngle1[zone][inode]["min"] = typemax(Float64)
+    StatsAngle1[zone][inode]["max"] = 0.0
+    StatsAngle1[zone][inode]["sum"] = 0.0
+    StatsAngle2[zone][inode] = Dict()
+    StatsAngle2[zone][inode]["min"] = typemax(Float64)
+    StatsAngle2[zone][inode]["max"] = 0.0
+    StatsAngle2[zone][inode]["sum"] = 0.0
   end
 end
 
@@ -766,8 +813,10 @@ end
 nrows = length(measdata[0])
 println("number of timestamps to procrss: $(nrows)")
 
+ntimestamps = 0
 #for row = 1:1 # first timestamp only
 for row = 1:nrows # all timestamps
+  global ntimestamps += 1
 
   for zone = 0:5
     # This logic assumes that the order of measurement data (columns in a row)
@@ -798,14 +847,14 @@ for row = 1:nrows # all timestamps
     timestamp = measdata[zone][row][1]
     println("\n================================================================================")
     println("1st optimization magnitude comparison for timestamp $(timestamp), zone: $(zone)\n")
-    compare_estimate_magnitudes(v1[zone], nodenames[zone], FPIResults[zone][timestamp], zone)
+    compare_estimate_magnitudes(v1[zone], nodenames[zone], FPIResults[zone][timestamp], zone, StatsMagnitude1[zone])
   end
 
   for zone = 0:5
     timestamp = measdata[zone][row][1]
     println("\n================================================================================")
     println("1st optimization angle comparison for timestamp $(timestamp), zone: $(zone)\n")
-    compare_estimate_angles(T1_updated[zone], nodenames[zone], FPIResults[zone][timestamp], zone, Vnom[zone])
+    compare_estimate_angles(T1_updated[zone], nodenames[zone], FPIResults[zone][timestamp], zone, Vnom[zone], StatsAngle1[zone])
   end
 
   perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
@@ -826,14 +875,32 @@ for row = 1:nrows # all timestamps
     timestamp = measdata[zone][row][1]
     println("\n================================================================================")
     println("2nd optimization magnitude comparison for timestamp $(timestamp), zone: $(zone)\n")
-    compare_estimate_magnitudes(v2[zone], nodenames[zone], FPIResults[zone][timestamp], zone)
+    compare_estimate_magnitudes(v2[zone], nodenames[zone], FPIResults[zone][timestamp], zone, StatsMagnitude2[zone])
   end
 
   for zone = 0:5
     timestamp = measdata[zone][row][1]
     println("\n================================================================================")
     println("2nd optimization angle comparison for timestamp $(timestamp), zone: $(zone)\n")
-    compare_estimate_angles(T2_updated[zone], nodenames[zone], FPIResults[zone][timestamp], zone, Vnom[zone])
+    compare_estimate_angles(T2_updated[zone], nodenames[zone], FPIResults[zone][timestamp], zone, Vnom[zone], StatsAngle2[zone])
+  end
+end
+
+for zone = 0:5
+  nnode = length(Vnom[zone])
+  println("\n2nd optimization magnitude stats for zone: $(zone), # of timestamps: $(ntimestamps):")
+  for inode = 1:nnode
+    mean = StatsMagnitude2[zone][inode]["sum"]/ntimestamps
+    println("""  Magnitude diff min, max, mean for $(nodenames[zone][inode]): $(StatsMagnitude2[zone][inode]["min"]), $(StatsMagnitude2[zone][inode]["max"]), $(mean)""")
+  end
+end
+
+for zone = 0:5
+  nnode = length(Vnom[zone])
+  println("\n2nd optimization angle stats for zone: $(zone), # of timestamps: $(ntimestamps):")
+  for inode = 1:nnode
+    mean = StatsAngle2[zone][inode]["sum"]/ntimestamps
+    println("""  Angle diff min, max, mean for $(nodenames[zone][inode]): $(StatsAngle2[zone][inode]["min"]), $(StatsAngle2[zone][inode]["max"]), $(mean)""")
   end
 end
 
