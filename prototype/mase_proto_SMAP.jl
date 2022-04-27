@@ -6,7 +6,31 @@ using SparseArrays
 
 test_dir = "mase_files_pu"
 
-function get_input(zone, shared_nodenames)
+
+function close_to(value, check)
+  return value-5.0<=check && value+5.0>=check
+end
+
+
+function get_phase(angle)
+  # this is a simplified implementation for the test case
+  # to make it fully correct, it should accomodate +30 degree angle shifts
+  # to the source bus nodes and if that shift is present, all other angle
+  # checks should also be shifted that +30 degrees
+  if close_to(angle, 0.0) || close_to(angle, 180.0)
+    return "A"
+  elseif close_to(angle, -120.0) || close_to(angle, 60.0)
+    return "B"
+  elseif close_to(angle, 120.0) || close_to(angle, -60.0)
+    return "C"
+  else
+    println("WARNING: Vnom angle of $(angle) does not map to a phase, falling back to phase A")
+    return "A"
+  end
+end
+
+
+function get_input(zone, shared_nodenames, phase_shared_nodenames)
   println("    Reading input files for zone: $(zone)")
   nodename_nodeidx_map = Dict()
   nodenames = Vector{String}()
@@ -17,7 +41,7 @@ function get_input(zone, shared_nodenames)
     nodename_nodeidx_map[row[1]] = inode
     push!(nodenames, row[1])
 
-    if row[1] in keys(shared_nodenames)
+    if haskey(shared_nodenames, row[1])
       push!(shared_nodenames[row[1]], (zone, inode))
     end
   end
@@ -38,7 +62,7 @@ function get_input(zone, shared_nodenames)
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
     stype = row[1]
-    if !(stype in keys(measidxs1))
+    if !haskey(measidxs1, stype)
       measidxs1[stype] = Vector{Int64}()
       measidxs2[stype] = Vector{Int64}()
     end
@@ -51,9 +75,9 @@ function get_input(zone, shared_nodenames)
     append!(rmat1, row[6]^2)
     append!(rmat2, row[6]^2)
 
-    if row[3] in keys(shared_nodenames)
+    if haskey(shared_nodenames, row[3])
       nodeidx = nodename_nodeidx_map[row[3]]
-      if !(nodeidx in keys(shared_nodeidx_measidx2_map))
+      if !haskey(shared_nodeidx_measidx2_map, nodeidx)
         shared_nodeidx_measidx2_map[nodeidx] = Vector{Int64}()
       end
 
@@ -109,37 +133,37 @@ function get_input(zone, shared_nodenames)
   end
 
   println("    Total number of 1st estimate measurements: $(imeas1)")
-  if "vi" in keys(measidxs1)
+  if haskey(measidxs1, "vi")
     println("    Number of vi measurements: $(length(measidxs1["vi"]))")
     println("    vi measurement indices: $(measidxs1["vi"])")
   end
-  if "Ti" in keys(measidxs1)
+  if haskey(measidxs1, "Ti")
     println("    Number of Ti measurements: $(length(measidxs1["Ti"]))")
     println("    Ti measurement indices: $(measidxs1["Ti"])")
   end
-  if "Pi" in keys(measidxs1)
+  if haskey(measidxs1, "Pi")
     println("    Number of Pi measurements: $(length(measidxs1["Pi"]))")
     println("    Pi measurement indices: $(measidxs1["Pi"])")
   end
-  if "Qi" in keys(measidxs1)
+  if haskey(measidxs1, "Qi")
     println("    Number of Qi measurements: $(length(measidxs1["Qi"]))")
     println("    Qi measurement indices: $(measidxs1["Qi"])")
   end
 
   println("    Total number of 2nd estimate measurements: $(imeas2)")
-  if "vi" in keys(measidxs2)
+  if haskey(measidxs2, "vi")
     println("    Number of vi measurements: $(length(measidxs2["vi"]))")
     println("    vi measurement indices: $(measidxs2["vi"])")
   end
-  if "Ti" in keys(measidxs2)
+  if haskey(measidxs2, "Ti")
     println("    Number of Ti measurements: $(length(measidxs2["Ti"]))")
     println("    Ti measurement indices: $(measidxs2["Ti"])")
   end
-  if "Pi" in keys(measidxs2)
+  if haskey(measidxs2, "Pi")
     println("    Number of Pi measurements: $(length(measidxs2["Pi"]))")
     println("    Pi measurement indices: $(measidxs2["Pi"])")
   end
-  if "Qi" in keys(measidxs2)
+  if haskey(measidxs2, "Qi")
     println("    Number of Qi measurements: $(length(measidxs2["Qi"]))")
     println("    Qi measurement indices: $(measidxs2["Qi"])")
   end
@@ -171,17 +195,35 @@ function get_input(zone, shared_nodenames)
 
   Vnom = Dict()
   inom = 0
+  phase_nodenames = Dict()
   for row in CSV.File(string(test_dir, "/vnom.csv.", zone))
-    if row[1] in keys(nodename_nodeidx_map)
-      Vnom[nodename_nodeidx_map[row[1]]] = (row[2], row[3])
+    node = row[1]
+    if haskey(nodename_nodeidx_map, node)
+      Vnom[nodename_nodeidx_map[node]] = (row[2], row[3])
       inom += 1
+
+      # determine the phase based on vnom angle
+      phase = get_phase(row[3])
+      if !haskey(phase_nodenames, phase)
+        phase_nodenames[phase] = Vector{String}()
+      end
+      # add the node to the list of nodes for that phase
+      push!(phase_nodenames[phase], node)
+      #println("*** zone: $(zone), node: $(node), phase: $(phase)")
+
+      if haskey(shared_nodenames, node)
+        if !haskey(phase_shared_nodenames, phase)
+          phase_shared_nodenames[phase] = Dict()
+        end
+        phase_shared_nodenames[phase][node] = shared_nodenames[node]
+      end
     end
   end
   println("    Vnom number of elements: $(inom)")
 
   measdata = CSV.File(string(test_dir, "/measurement_data.csv.", zone))
 
-  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodenames, nodename_nodeidx_map, shared_nodeidx_measidx2_map, measdata
+  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodenames, nodename_nodeidx_map, shared_nodeidx_measidx2_map, phase_nodenames, measdata
 end
 
 
@@ -265,19 +307,19 @@ function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T
   for (zonedest, Zonemeas) in Sharedmeas
     for (measdest, source) in Zonemeas
       #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
-      if "vi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["vi"]
+      if haskey(measidxs2[zonedest], "vi") && measdest in measidxs2[zonedest]["vi"]
         println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], value.(v1[source[1]][source[2]]))
         println("*** zone $(zonedest) zvec2 vi exchange for measurement $(measdest): $(value.(v1[source[1]][source[2]]))")
-      elseif "Ti" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Ti"]
+      elseif haskey(measidxs2[zonedest], "Ti") && measdest in measidxs2[zonedest]["Ti"]
         println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T1 value: $(value.(T1[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], value.(T1[source[1]][source[2]]))
         println("*** zone $(zonedest) zvec2 Ti exchange for measurement $(measdest): $(value.(T1[source[1]][source[2]]))")
-      elseif "Pi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Pi"]
+      elseif haskey(measidxs2[zonedest], "Pi") && measdest in measidxs2[zonedest]["Pi"]
         println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S real value: $(-1*real(S[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], -1*real(S[source[1]][source[2]]))
         println("*** zone $(zonedest) zvec2 Pi exchange for measurement $(measdest): $(-1*real(S[source[1]][source[2]]))")
-      elseif "Qi" in keys(measidxs2[zonedest]) && measdest in measidxs2[zonedest]["Qi"]
+      elseif haskey(measidxs2[zonedest], "Qi") && measdest in measidxs2[zonedest]["Qi"]
         println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S imag value: $(-1*imag(S[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
         println("*** zone $(zonedest) zvec2 Qi exchange for measurement $(measdest): $(-1*imag(S[source[1]][source[2]]))")
@@ -292,15 +334,15 @@ function buildZonegraph(parzone, shared_nodenames, Zonenodes, Zonegraph)
   #fake = 0
   for node in Zonenodes[parzone]
     for (zone, nodeidx) in shared_nodenames[node]
-      if zone != parzone && !(zone in keys(Zonegraph))
-        if !(parzone in keys(Zonegraph))
+      if zone != parzone && !haskey(Zonegraph, zone)
+        if !haskey(Zonegraph, parzone)
           Zonegraph[parzone] = Array{Tuple{Int64,Int64},1}()
         end
 
         buildZonegraph(zone, shared_nodenames, Zonenodes, Zonegraph)
 
         println("buildZonegraph Zonegraph[$(parzone)] add child zone: $(zone)")
-        if zone in keys(Zonegraph)
+        if haskey(Zonegraph, zone)
           push!(Zonegraph[parzone], (zone, length(Zonegraph[zone])))
         else
           push!(Zonegraph[parzone], (zone, 0))
@@ -318,7 +360,7 @@ end
 
 function buildZoneorder(parzone, Zonegraph, Zoneorder)
   println("buildZoneorder parent zone: $(parzone)")
-  if parzone in keys(Zonegraph)
+  if haskey(Zonegraph, parzone)
     # order children zones by the count of children each of those have
     order = sort(Zonegraph[parzone], by=x->x[2], rev=true)
     println("buildZoneorder sorted: $(order)")
@@ -334,7 +376,7 @@ function buildZoneorder(parzone, Zonegraph, Zoneorder)
 end
 
 
-function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
+function setup_angle_passing_phase(nodename_nodeidx_map, shared_nodenames)
   # first task is determining the zone ordering
 
   # determine the system reference zone from which zone source nodes are in
@@ -344,7 +386,7 @@ function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
   for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
     node = row[1]
     for zone = 0:5
-      if node in keys(nodename_nodeidx_map[zone])
+      if haskey(nodename_nodeidx_map[zone], node)
         if sysref_flag
           println("WARNING: found source nodes in multiple zones")
         else
@@ -371,7 +413,110 @@ function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
   for (node, zonepairs) in shared_nodenames
     for zonepair in zonepairs
       zone = zonepair[1]
-      if !(zone in keys(Zonenodes))
+      if !haskey(Zonenodes, zone)
+        Zonenodes[zone] = Vector{String}()
+      end
+      push!(Zonenodes[zone], node)
+    end
+  end
+  println("Shared nodes per zone, Zonenodes: $(Zonenodes)")
+
+  Zonegraph = Dict()
+  # invoke recursive function to build the graph of connected zones
+  # pass the system reference zone and recursion will build the rest
+  buildZonegraph(sysref_zone, shared_nodenames, Zonenodes, Zonegraph)
+  println("Connected zones graph, Zonegraph: $(Zonegraph)")
+
+  Zoneorder = Vector{Int64}()
+  append!(Zoneorder, sysref_zone) # system reference zone is always first
+  # traverse the zone graph recursively starting from the system reference
+  # zone to build the full zone ordering
+  buildZoneorder(sysref_zone, Zonegraph, Zoneorder)
+  println("Zone ordering vector, Zoneorder: $(Zoneorder)")
+
+  # create a dictionary to quickly lookup order by zone
+  iorder = 0
+  ZoneorderDict = Dict()
+  # iterate over Zoneorder backwards so the higher priority zones
+  # get larger values
+  for zone in Iterators.Reverse(Zoneorder)
+    iorder += 1
+    ZoneorderDict[zone] = iorder
+  end
+  println("Zone ordering dictionary, ZoneorderDict: $(ZoneorderDict)")
+
+  # second task is determining the zone reference nodes
+
+  Zonerefinfo = Dict()
+  for zone = 0:5
+    if zone == sysref_zone
+      # for the system reference zone, the zone reference node is always
+      # the system reference node
+      Zonerefinfo[zone] = (sysref_node, nothing, nothing)
+    else
+      # determine what the shared nodes are for this zone to find the one
+      # that is the zone reference node
+      # check each shared node to see which has the highest zone order for
+      # the other zones where it is shared
+      max_priority = 0
+      max_node = max_zone = max_idx = nothing
+      for node in Zonenodes[zone]
+        # find other zone that node is shared with
+        for (shared_zone, shared_idx) in shared_nodenames[node]
+          if shared_zone!=zone && ZoneorderDict[shared_zone]>max_priority
+            max_priority = ZoneorderDict[shared_zone]
+            max_node = node
+            max_zone = shared_zone
+            max_idx = shared_idx
+          end
+        end
+      end
+      Zonerefinfo[zone] = (max_node, max_zone, max_idx)
+    end
+  end
+  println("Zone reference info, Zonerefinfo: $(Zonerefinfo)")
+
+  return Zoneorder, Zonerefinfo
+end
+
+function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
+  # first task is determining the zone ordering
+
+  # determine the system reference zone from which zone source nodes are in
+  sysref_flag = false
+  sysref_zone = 0
+  sysref_node = ""
+  for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
+    node = row[1]
+    for zone = 0:5
+      if haskey(nodename_nodeidx_map[zone], node)
+        if sysref_flag
+          println("WARNING: found source nodes in multiple zones")
+        else
+          sysref_flag = true
+          sysref_zone = zone
+          sysref_node = node
+        end
+      end
+    end
+  end
+
+  if sysref_flag
+    println("Found system reference node: $(sysref_node), in zone: $(sysref_zone)")
+  else
+    println("WARNING: system reference node and zone not found based on source nodes")
+  end
+
+  # build a graph of the zones linked to other zones by shared nodes
+  # shared_nodenames has the info needed to build this
+  println("shared_nodenames: $(shared_nodenames)")
+
+  # for each zone create a list of shared nodes
+  Zonenodes = Dict()
+  for (node, zonepairs) in shared_nodenames
+    for zonepair in zonepairs
+      zone = zonepair[1]
+      if !haskey(Zonenodes, zone)
         Zonenodes[zone] = Vector{String}()
       end
       push!(Zonenodes[zone], node)
@@ -539,7 +684,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
 
   @variable(nlp,v[1:nnode])
   for inode = 1:nnode
-    if inode in keys(Vnom)
+    if haskey(Vnom, inode)
       set_start_value.(v[inode], Vnom[inode][1])
     end
   end
@@ -550,7 +695,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
 
   @variable(nlp,T[1:nnode])
   for inode = 1:nnode
-    if inode in keys(Vnom)
+    if haskey(Vnom, inode)
       start = Vnom[inode][2]
       set_start_value.(T[inode], deg2rad(start))
       @NLconstraint(nlp, deg2rad(start-90.0) <= T[inode] <= deg2rad(start+90.0))
@@ -561,7 +706,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
   @NLexpression(nlp, vzi[i=1:nmeas], v[measidx_nodeidx_map[i]])
 
   # vi measurements
-  if "vi" in keys(measidxs)
+  if haskey(measidxs, "vi")
     @NLexpression(nlp, Visum, sum((zvec[i] - vzi[i])^2/rmat[i] for i in measidxs["vi"]))
   else
     @NLexpression(nlp, Visum, 0.0)
@@ -570,21 +715,21 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
   @NLexpression(nlp, Tzi[i=1:nmeas], T[measidx_nodeidx_map[i]])
 
   # Ti measurements
-  if "Ti" in keys(measidxs)
+  if haskey(measidxs, "Ti")
     @NLexpression(nlp, Tisum, sum((zvec[i] - Tzi[i])^2/rmat[i] for i in measidxs["Ti"]))
   else
     @NLexpression(nlp, Tisum, 0.0)
   end
 
   # common terms for Pi and Qi measurements
-  if "Pi" in keys(measidxs) || "Qi" in keys(measidxs)
+  if haskey(measidxs, "Pi") || haskey(measidxs, "Qi")
     @NLexpression(nlp, Tzij[i=1:nmeas,j in keys(Ybus[measidx_nodeidx_map[i]])], Tzi[i] - T[j])
     @NLexpression(nlp, Gzij[i=1:nmeas,j in keys(Ybus[measidx_nodeidx_map[i]])], real.(Ybus[measidx_nodeidx_map[i]][j]))
     @NLexpression(nlp, Bzij[i=1:nmeas,j in keys(Ybus[measidx_nodeidx_map[i]])], imag.(Ybus[measidx_nodeidx_map[i]][j]))
   end
 
   # Pi measurements
-  if "Pi" in keys(measidxs)
+  if haskey(measidxs, "Pi")
     @NLexpression(nlp, h_Pi[i in measidxs["Pi"]], vzi[i] * sum(v[j]*(Gzij[i,j]*cos(Tzij[i,j]) + Bzij[i,j]*sin(Tzij[i,j])) for j in keys(Ybus[measidx_nodeidx_map[i]])))
     @NLexpression(nlp, Pisum, sum((zvec[i] - h_Pi[i])^2/rmat[i] for i in measidxs["Pi"]))
   else
@@ -592,7 +737,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
   end
 
   # Qi measurements
-  if "Qi" in keys(measidxs)
+  if haskey(measidxs, "Qi")
     @NLexpression(nlp, h_Qi[i in measidxs["Qi"]], vzi[i] * sum(v[j]*(Gzij[i,j]*sin(Tzij[i,j]) - Bzij[i,j]*cos(Tzij[i,j])) for j in keys(Ybus[measidx_nodeidx_map[i]])))
     @NLexpression(nlp, Qisum, sum((zvec[i] - h_Qi[i])^2/rmat[i] for i in measidxs["Qi"]))
   else
@@ -694,11 +839,18 @@ Vnom = Dict()
 nodenames = Dict()
 nodename_nodeidx_map = Dict()
 shared_nodeidx_measidx2_map = Dict()
+phase_nodenames = Dict()
+phase_shared_nodenames = Dict()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
+  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], phase_nodenames[zone], measdata[zone] = get_input(zone, shared_nodenames, phase_shared_nodenames)
 end
+
+#println("phase_nodenames:")
+#println(phase_nodenames)
+#println("phase_shared_nodenames:")
+#println(phase_shared_nodenames)
 
 Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
 
