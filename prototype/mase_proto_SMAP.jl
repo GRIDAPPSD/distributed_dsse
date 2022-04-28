@@ -782,13 +782,6 @@ for zone = 0:5
   measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], phase_nodenames[zone], measdata[zone] = get_input(zone, shared_nodenames, phase_shared_nodenames, phase_set)
 end
 
-#println("phase_nodenames:")
-#println(phase_nodenames)
-#println("phase_shared_nodenames:")
-#println(phase_shared_nodenames)
-println("phase_set:")
-println(phase_set)
-
 Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
 
 # do the data structure initialization  for reference angle passing
@@ -883,7 +876,7 @@ for row = 1:nrows # all timestamps
 
   # perform reference angle passing to get the final angle results
   println("\n================================================================================")
-  println("Reference angle passing:\n")
+  println("Reference angle passing:")
   T1_updated = perform_angle_passing(T1, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
 
   for zone = 0:5
@@ -911,7 +904,7 @@ for row = 1:nrows # all timestamps
 
   # perform reference angle passing to get the final angle results
   println("\n================================================================================")
-  println("Reference angle passing:\n")
+  println("Reference angle passing:")
   T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
 
   for zone = 0:5
