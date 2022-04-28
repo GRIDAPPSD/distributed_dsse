@@ -7,6 +7,11 @@ using SparseArrays
 test_dir = "mase_files_pu"
 
 
+function goodbye()
+  ccall(:jl_exit, Cvoid, (Int32,), 86)
+end
+
+
 function close_to(value, check)
   return value-5.0<=check && value+5.0>=check
 end
@@ -24,13 +29,13 @@ function get_phase(angle)
   elseif close_to(angle, 120.0) || close_to(angle, -60.0)
     return "C"
   else
-    println("WARNING: Vnom angle of $(angle) does not map to a phase, falling back to phase A")
+    println("WARNING: Vnom angle of $(angle) does not map to a phase, defaulting to phase A")
     return "A"
   end
 end
 
 
-function get_input(zone, shared_nodenames, phase_shared_nodenames)
+function get_input(zone, shared_nodenames, phase_shared_nodenames, phase_set)
   println("    Reading input files for zone: $(zone)")
   nodename_nodeidx_map = Dict()
   nodenames = Vector{String}()
@@ -217,6 +222,8 @@ function get_input(zone, shared_nodenames, phase_shared_nodenames)
         end
         phase_shared_nodenames[phase][node] = shared_nodenames[node]
       end
+
+      push!(phase_set, phase)
     end
   end
   println("    Vnom number of elements: $(inom)")
@@ -376,208 +383,130 @@ function buildZoneorder(parzone, Zonegraph, Zoneorder)
 end
 
 
-function setup_angle_passing_phase(nodename_nodeidx_map, shared_nodenames)
-  # first task is determining the zone ordering
+function setup_angle_passing(nodename_nodeidx_map, phase_set, phase_nodenames, phase_shared_nodenames)
+  # first task is finding and validating system reference zones and nodes
 
-  # determine the system reference zone from which zone source nodes are in
-  sysref_flag = false
-  sysref_zone = 0
-  sysref_node = ""
+  # determine system reference zone and node pair per phase from source nodes
+  sysref = Dict()
   for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
     node = row[1]
     for zone = 0:5
       if haskey(nodename_nodeidx_map[zone], node)
-        if sysref_flag
-          println("WARNING: found source nodes in multiple zones")
-        else
-          sysref_flag = true
-          sysref_zone = zone
-          sysref_node = node
-        end
-      end
-    end
-  end
-
-  if sysref_flag
-    println("Found system reference node: $(sysref_node), in zone: $(sysref_zone)")
-  else
-    println("WARNING: system reference node and zone not found based on source nodes")
-  end
-
-  # build a graph of the zones linked to other zones by shared nodes
-  # shared_nodenames has the info needed to build this
-  println("shared_nodenames: $(shared_nodenames)")
-
-  # for each zone create a list of shared nodes
-  Zonenodes = Dict()
-  for (node, zonepairs) in shared_nodenames
-    for zonepair in zonepairs
-      zone = zonepair[1]
-      if !haskey(Zonenodes, zone)
-        Zonenodes[zone] = Vector{String}()
-      end
-      push!(Zonenodes[zone], node)
-    end
-  end
-  println("Shared nodes per zone, Zonenodes: $(Zonenodes)")
-
-  Zonegraph = Dict()
-  # invoke recursive function to build the graph of connected zones
-  # pass the system reference zone and recursion will build the rest
-  buildZonegraph(sysref_zone, shared_nodenames, Zonenodes, Zonegraph)
-  println("Connected zones graph, Zonegraph: $(Zonegraph)")
-
-  Zoneorder = Vector{Int64}()
-  append!(Zoneorder, sysref_zone) # system reference zone is always first
-  # traverse the zone graph recursively starting from the system reference
-  # zone to build the full zone ordering
-  buildZoneorder(sysref_zone, Zonegraph, Zoneorder)
-  println("Zone ordering vector, Zoneorder: $(Zoneorder)")
-
-  # create a dictionary to quickly lookup order by zone
-  iorder = 0
-  ZoneorderDict = Dict()
-  # iterate over Zoneorder backwards so the higher priority zones
-  # get larger values
-  for zone in Iterators.Reverse(Zoneorder)
-    iorder += 1
-    ZoneorderDict[zone] = iorder
-  end
-  println("Zone ordering dictionary, ZoneorderDict: $(ZoneorderDict)")
-
-  # second task is determining the zone reference nodes
-
-  Zonerefinfo = Dict()
-  for zone = 0:5
-    if zone == sysref_zone
-      # for the system reference zone, the zone reference node is always
-      # the system reference node
-      Zonerefinfo[zone] = (sysref_node, nothing, nothing)
-    else
-      # determine what the shared nodes are for this zone to find the one
-      # that is the zone reference node
-      # check each shared node to see which has the highest zone order for
-      # the other zones where it is shared
-      max_priority = 0
-      max_node = max_zone = max_idx = nothing
-      for node in Zonenodes[zone]
-        # find other zone that node is shared with
-        for (shared_zone, shared_idx) in shared_nodenames[node]
-          if shared_zone!=zone && ZoneorderDict[shared_zone]>max_priority
-            max_priority = ZoneorderDict[shared_zone]
-            max_node = node
-            max_zone = shared_zone
-            max_idx = shared_idx
+        # find the phase for the node
+        for (phase, phasenodes) in phase_nodenames[zone]
+          if node in phasenodes
+            if haskey(sysref, phase)
+              println("ERROR: found multiple source nodes for phase: $(phase)")
+              goodbye()
+            else
+              sysref[phase] = (zone, node)
+              break
+            end
           end
         end
       end
-      Zonerefinfo[zone] = (max_node, max_zone, max_idx)
     end
   end
-  println("Zone reference info, Zonerefinfo: $(Zonerefinfo)")
 
-  return Zoneorder, Zonerefinfo
-end
+  # check if there is a system reference for each phase that has nodes
+  for phase in phase_set
+    if !haskey(sysref, phase)
+      println("ERROR: no system reference zone and node found for phase: $(phase)")
+      goodbye()
+    end
+  end
 
-function setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
-  # first task is determining the zone ordering
+  # check if the system reference for all phases are in the same zone
+  checkzone = nothing
+  for (phase, (refzone, refnode)) in sysref
+    println("Found system reference for phase: $(phase), zone: $(refzone), node: $(refnode)")
+    if checkzone == nothing
+      checkzone = refzone
+    elseif refzone != checkzone
+      println("ERROR: system reference nodes not all in the same zone")
+      goodbye()
+    end
+  end
 
-  # determine the system reference zone from which zone source nodes are in
-  sysref_flag = false
-  sysref_zone = 0
-  sysref_node = ""
-  for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
-    node = row[1]
+  # second task is determining the zone ordering
+
+  Zoneorder = Dict()
+  Zonerefinfo = Dict()
+
+  for (phase, (refzone, refnode)) in sysref
+    # build a graph of the zones linked to other zones by shared nodes
+    # phase_shared_nodenames has the info needed to build this
+    println("phase_shared_nodenames for phase $(phase): $(phase_shared_nodenames[phase])")
+
+    # for each zone create a list of shared nodes
+    Zonenodes = Dict()
+    for (node, zonepairs) in phase_shared_nodenames[phase]
+      for zonepair in zonepairs
+        zone = zonepair[1]
+        if !haskey(Zonenodes, zone)
+          Zonenodes[zone] = Vector{String}()
+        end
+        push!(Zonenodes[zone], node)
+      end
+    end
+    println("Shared nodes for phase $(phase) per zone, Zonenodes: $(Zonenodes)")
+
+    Zonegraph = Dict()
+    # invoke recursive function to build the graph of connected zones
+    # pass the system reference zone and recursion will build the rest
+    buildZonegraph(refzone, phase_shared_nodenames[phase], Zonenodes, Zonegraph)
+    println("Connected zones graph, Zonegraph: $(Zonegraph)")
+
+    Zoneorder[phase] = Vector{Int64}()
+    append!(Zoneorder[phase], refzone) # system reference zone is always first
+    # traverse the zone graph recursively starting from the system reference
+    # zone to build the full zone ordering
+    buildZoneorder(refzone, Zonegraph, Zoneorder[phase])
+    println("Zone ordering vector for phase $(phase), Zoneorder: $(Zoneorder[phase])")
+
+    # create a dictionary to quickly lookup order by zone
+    iorder = 0
+    ZoneorderDict = Dict()
+    # iterate over Zoneorder backwards so the higher priority zones
+    # get larger values
+    for zone in Iterators.Reverse(Zoneorder[phase])
+      iorder += 1
+      ZoneorderDict[zone] = iorder
+    end
+    println("Zone ordering dictionary, ZoneorderDict: $(ZoneorderDict)")
+
+    # third task is determining the zone reference nodes
+
+    Zonerefinfo[phase] = Dict()
+
     for zone = 0:5
-      if haskey(nodename_nodeidx_map[zone], node)
-        if sysref_flag
-          println("WARNING: found source nodes in multiple zones")
-        else
-          sysref_flag = true
-          sysref_zone = zone
-          sysref_node = node
-        end
-      end
-    end
-  end
-
-  if sysref_flag
-    println("Found system reference node: $(sysref_node), in zone: $(sysref_zone)")
-  else
-    println("WARNING: system reference node and zone not found based on source nodes")
-  end
-
-  # build a graph of the zones linked to other zones by shared nodes
-  # shared_nodenames has the info needed to build this
-  println("shared_nodenames: $(shared_nodenames)")
-
-  # for each zone create a list of shared nodes
-  Zonenodes = Dict()
-  for (node, zonepairs) in shared_nodenames
-    for zonepair in zonepairs
-      zone = zonepair[1]
-      if !haskey(Zonenodes, zone)
-        Zonenodes[zone] = Vector{String}()
-      end
-      push!(Zonenodes[zone], node)
-    end
-  end
-  println("Shared nodes per zone, Zonenodes: $(Zonenodes)")
-
-  Zonegraph = Dict()
-  # invoke recursive function to build the graph of connected zones
-  # pass the system reference zone and recursion will build the rest
-  buildZonegraph(sysref_zone, shared_nodenames, Zonenodes, Zonegraph)
-  println("Connected zones graph, Zonegraph: $(Zonegraph)")
-
-  Zoneorder = Vector{Int64}()
-  append!(Zoneorder, sysref_zone) # system reference zone is always first
-  # traverse the zone graph recursively starting from the system reference
-  # zone to build the full zone ordering
-  buildZoneorder(sysref_zone, Zonegraph, Zoneorder)
-  println("Zone ordering vector, Zoneorder: $(Zoneorder)")
-
-  # create a dictionary to quickly lookup order by zone
-  iorder = 0
-  ZoneorderDict = Dict()
-  # iterate over Zoneorder backwards so the higher priority zones
-  # get larger values
-  for zone in Iterators.Reverse(Zoneorder)
-    iorder += 1
-    ZoneorderDict[zone] = iorder
-  end
-  println("Zone ordering dictionary, ZoneorderDict: $(ZoneorderDict)")
-
-  # second task is determining the zone reference nodes
-
-  Zonerefinfo = Dict()
-  for zone = 0:5
-    if zone == sysref_zone
-      # for the system reference zone, the zone reference node is always
-      # the system reference node
-      Zonerefinfo[zone] = (sysref_node, nothing, nothing)
-    else
-      # determine what the shared nodes are for this zone to find the one
-      # that is the zone reference node
-      # check each shared node to see which has the highest zone order for
-      # the other zones where it is shared
-      max_priority = 0
-      max_node = max_zone = max_idx = nothing
-      for node in Zonenodes[zone]
-        # find other zone that node is shared with
-        for (shared_zone, shared_idx) in shared_nodenames[node]
-          if shared_zone!=zone && ZoneorderDict[shared_zone]>max_priority
-            max_priority = ZoneorderDict[shared_zone]
-            max_node = node
-            max_zone = shared_zone
-            max_idx = shared_idx
+      if zone == refzone
+        # for the system reference zone, the zone reference node is always
+        # the system reference node
+        Zonerefinfo[phase][zone] = (refnode, nothing, nothing)
+      else
+        # determine what the shared nodes are for this zone to find the one
+        # that is the zone reference node
+        # check each shared node to see which has the highest zone order for
+        # the other zones where it is shared
+        max_priority = 0
+        max_node = max_zone = max_idx = nothing
+        for node in Zonenodes[zone]
+          # find other zone that node is shared with
+          for (shared_zone, shared_idx) in phase_shared_nodenames[phase][node]
+            if shared_zone!=zone && ZoneorderDict[shared_zone]>max_priority
+              max_priority = ZoneorderDict[shared_zone]
+              max_node = node
+              max_zone = shared_zone
+              max_idx = shared_idx
+            end
           end
         end
+        Zonerefinfo[phase][zone] = (max_node, max_zone, max_idx)
       end
-      Zonerefinfo[zone] = (max_node, max_zone, max_idx)
     end
+    println("Zone reference info for phase $(phase), Zonerefinfo: $(Zonerefinfo[phase])")
   end
-  println("Zone reference info, Zonerefinfo: $(Zonerefinfo)")
 
   return Zoneorder, Zonerefinfo
 end
@@ -841,23 +770,27 @@ nodename_nodeidx_map = Dict()
 shared_nodeidx_measidx2_map = Dict()
 phase_nodenames = Dict()
 phase_shared_nodenames = Dict()
+phase_set = Set()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], phase_nodenames[zone], measdata[zone] = get_input(zone, shared_nodenames, phase_shared_nodenames)
+  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], phase_nodenames[zone], measdata[zone] = get_input(zone, shared_nodenames, phase_shared_nodenames, phase_set)
 end
 
 #println("phase_nodenames:")
 #println(phase_nodenames)
 #println("phase_shared_nodenames:")
 #println(phase_shared_nodenames)
+println("phase_set:")
+println(phase_set)
 
 Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
 
 # do the data structure initialization  for reference angle passing
-Zoneorder, Zonerefinfo = setup_angle_passing(nodename_nodeidx_map, shared_nodenames)
+Zoneorder, Zonerefinfo = setup_angle_passing(nodename_nodeidx_map, phase_set, phase_nodenames, phase_shared_nodenames)
 
 println("Done parsing input files, start defining optimization problem...")
+#=
 
 nlp1 = Dict()
 nlp2 = Dict()
@@ -1053,3 +986,4 @@ println("2nd optimization magnitude max mean difference zone: $(mag_max_mean_zon
 println("2nd optimization angle max difference zone: $(angle_max_max_zone), node: $(angle_max_max_node), value: $(angle_max_max)")
 println("2nd optimization angle max mean difference zone: $(angle_max_mean_zone), node: $(angle_max_mean_node), value: $(angle_max_mean)")
 
+=#
