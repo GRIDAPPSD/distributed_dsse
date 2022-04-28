@@ -300,7 +300,7 @@ function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T
   for zone = 0:5
     nnode = length(v1[zone]) # get number of nodes from # of v1 elements
 
-    V = Array{ComplexF64}(undef, nnode)
+    V = Vector{ComplexF64}(undef, nnode)
     for inode = 1:nnode
       V[inode] = value.(v1[zone][inode]) * exp(value.(T1[zone][inode])*1im)
     end
@@ -512,44 +512,49 @@ function setup_angle_passing(nodename_nodeidx_map, phase_set, phase_nodenames, p
 end
 
 
-function perform_angle_passing(T, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
+function perform_angle_passing(T, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
   # store the updated angles after reference angle passing in a new data
   # structure because I can't update the JuMP T solution vector
   T_updated = Dict()
+  for zone = 0:5
+    # declare and allocate the per zone vectors for the updated angles
+    T_updated[zone] = Vector{Float64}(undef, length(nodename_nodeidx_map[zone]))
+  end
 
-  for zone in Zoneorder
-    # declare the vector for the updated angles
-    T_updated[zone] = Vector{Float64}()
+  for phase in phase_set
+    for zone in Zoneorder[phase]
+      # get the reference node and index for the zone along with the shared zone
+      # and node index in that zone for the reference node
+      ref_node, shared_zone, shared_idx = Zonerefinfo[phase][zone]
+      ref_idx = nodename_nodeidx_map[zone][ref_node]
 
-    # get the reference node and index for the zone along with the shared zone
-    # and node index in that zone for the reference node (stored in Zonerefinfo)
-    ref_node, shared_zone, shared_idx = Zonerefinfo[zone]
-    ref_idx = nodename_nodeidx_map[zone][ref_node]
+      # get the JuMP solution angle for the reference node
+      current_ref_angle = value.(T[zone][ref_idx])
 
-    # get the JuMP solution angle for the reference node
-    current_ref_angle = value.(T[zone][ref_idx])
+      if shared_zone == nothing
+        last_ref_angle = 0.0
+      else
+        # the shared_zone/shared_idx pair is the higher order shared zone and
+        # node index for the reference node which is used to calculate the
+        # adjustment needed in the current zone to make the angle values
+        # the same
+        last_ref_angle = T_updated[shared_zone][shared_idx]
+      end
 
-    if shared_zone == nothing
-      last_ref_angle = 0.0
-    else
-      # the shared_zone/shared_idx pair is the higher order shared zone and
-      # node index for the reference node which is used to calculate the
-      # adjustment needed in the current zone to make the angle values
-      # the same
-      last_ref_angle = T_updated[shared_zone][shared_idx]
-    end
+      # calculate the difference or adjustment needed for each angle based
+      # on the reference angle value in the higher zone order zone where the
+      # reference node is shared and the current reference angle
+      diff_angle = last_ref_angle - current_ref_angle
+      println("phase $(phase), zone $(zone), ref_node $(nodenames[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
 
-    # calculate the difference or adjustment needed for each angle based
-    # on the reference angle value in the higher zone order zone where the
-    # reference node is shared and the current reference angle
-    diff_angle = last_ref_angle - current_ref_angle
-    println("zone $(zone), ref_node $(nodenames[zone][ref_idx]), last_ref_angle: $(last_ref_angle), current_ref_angle: $(current_ref_angle), diff_angle: $(diff_angle)")
-
-    # update every angle for the zone based on this adjustment factor
-    for inode in 1:length(nodenames[zone])
-      updated_angle = value.(T[zone][inode]) + diff_angle
-      append!(T_updated[zone], updated_angle)
-      println("zone $(zone), node $(nodenames[zone][inode]), original angle: $(value.(T[zone][inode])), updated angle: $(T_updated[zone][inode])")
+      # update every angle for nodes of the current phase in the zone based on
+      # this adjustment factor
+      for node in phase_nodenames[zone][phase]
+        inode = nodename_nodeidx_map[zone][node]
+        updated_angle = value.(T[zone][inode]) + diff_angle
+        T_updated[zone][inode] = updated_angle
+        println("phase $(phase), zone $(zone), node $(node), original angle: $(value.(T[zone][inode])), updated angle: $(T_updated[zone][inode])")
+      end
     end
   end
 
@@ -790,7 +795,6 @@ Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_
 Zoneorder, Zonerefinfo = setup_angle_passing(nodename_nodeidx_map, phase_set, phase_nodenames, phase_shared_nodenames)
 
 println("Done parsing input files, start defining optimization problem...")
-#=
 
 nlp1 = Dict()
 nlp2 = Dict()
@@ -880,7 +884,7 @@ for row = 1:nrows # all timestamps
   # perform reference angle passing to get the final angle results
   println("\n================================================================================")
   println("Reference angle passing:\n")
-  T1_updated = perform_angle_passing(T1, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
+  T1_updated = perform_angle_passing(T1, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
 
   for zone = 0:5
     timestamp = measdata[zone][row][1]
@@ -908,7 +912,7 @@ for row = 1:nrows # all timestamps
   # perform reference angle passing to get the final angle results
   println("\n================================================================================")
   println("Reference angle passing:\n")
-  T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map, nodenames)
+  T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
 
   for zone = 0:5
     timestamp = measdata[zone][row][1]
@@ -986,4 +990,3 @@ println("2nd optimization magnitude max mean difference zone: $(mag_max_mean_zon
 println("2nd optimization angle max difference zone: $(angle_max_max_zone), node: $(angle_max_max_node), value: $(angle_max_max)")
 println("2nd optimization angle max mean difference zone: $(angle_max_mean_zone), node: $(angle_max_mean_node), value: $(angle_max_mean)")
 
-=#
