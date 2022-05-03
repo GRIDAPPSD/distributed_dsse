@@ -17,16 +17,18 @@ function close_to(value, check)
 end
 
 
-function get_phase(angle)
+function get_phase(angle, phase_shift_flag)
+  phase_shift = phase_shift_flag ? 30.0 : 0.0
+
   # this is a simplified implementation for the test case
   # to make it fully correct, it should accomodate +30 degree angle shifts
   # to the source bus nodes and if that shift is present, all other angle
   # checks should also be shifted that +30 degrees
-  if close_to(angle, 0.0) || close_to(angle, 180.0)
+  if close_to(angle, 0.0+phase_shift) || close_to(angle, 180.0+phase_shift)
     return "A"
-  elseif close_to(angle, -120.0) || close_to(angle, 60.0)
+  elseif close_to(angle, -120.0+phase_shift) || close_to(angle, 60.0+phase_shift)
     return "B"
-  elseif close_to(angle, 120.0) || close_to(angle, -60.0)
+  elseif close_to(angle, 120.0+phase_shift) || close_to(angle, -60.0+phase_shift)
     return "C"
   else
     println("WARNING: Vnom angle of $(angle) does not map to a phase, defaulting to phase A")
@@ -35,7 +37,7 @@ function get_phase(angle)
 end
 
 
-function get_input(zone, shared_nodenames, phase_shared_nodenames, phase_set)
+function get_input(zone, shared_nodenames)
   println("    Reading input files for zone: $(zone)")
   nodename_nodeidx_map = Dict()
   nodenames = Vector{String}()
@@ -199,38 +201,17 @@ function get_input(zone, shared_nodenames, phase_shared_nodenames, phase_set)
   println("    Ybus number of lower diagonal elements: $(ibus)")
 
   Vnom = Dict()
-  inom = 0
-  phase_nodenames = Dict()
   for row in CSV.File(string(test_dir, "/vnom.csv.", zone))
     node = row[1]
     if haskey(nodename_nodeidx_map, node)
       Vnom[nodename_nodeidx_map[node]] = (row[2], row[3])
-      inom += 1
-
-      # determine the phase based on vnom angle
-      phase = get_phase(row[3])
-      if !haskey(phase_nodenames, phase)
-        phase_nodenames[phase] = Vector{String}()
-      end
-      # add the node to the list of nodes for that phase
-      push!(phase_nodenames[phase], node)
-      #println("*** zone: $(zone), node: $(node), phase: $(phase)")
-
-      if haskey(shared_nodenames, node)
-        if !haskey(phase_shared_nodenames, phase)
-          phase_shared_nodenames[phase] = Dict()
-        end
-        phase_shared_nodenames[phase][node] = shared_nodenames[node]
-      end
-
-      push!(phase_set, phase)
     end
   end
-  println("    Vnom number of elements: $(inom)")
+  println("    Vnom number of elements: $(length(Vnom))")
 
   measdata = CSV.File(string(test_dir, "/measurement_data.csv.", zone))
 
-  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodenames, nodename_nodeidx_map, shared_nodeidx_measidx2_map, phase_nodenames, measdata
+  return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodenames, nodename_nodeidx_map, shared_nodeidx_measidx2_map, measdata
 end
 
 
@@ -383,10 +364,68 @@ function buildZoneorder(parzone, Zonegraph, Zoneorder)
 end
 
 
-function setup_angle_passing(nodename_nodeidx_map, phase_set, phase_nodenames, phase_shared_nodenames)
-  # first task is finding and validating system reference zones and nodes
+function setup_angle_passing(nodenames, nodename_nodeidx_map, Vnom, phase_set, phase_nodenames, phase_shared_nodenames)
 
-  # determine system reference zone and node pair per phase from source nodes
+  # first, determine if vnom angles are shifted 30 degrees based on the phase
+  # A source node, thus allowing the phases of all other nodes to be determined
+  phase_shift_flag = nothing
+
+  for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
+    node = row[1]
+    for zone = 0:5
+      if haskey(nodename_nodeidx_map[zone], node)
+        angle = Vnom[zone][nodename_nodeidx_map[zone][node]][2]
+        if close_to(angle, 0.0)
+          phase_shift_flag = false
+          break
+        elseif close_to(angle, 30.0)
+          phase_shift_flag = true
+          break
+        end
+      end
+    end
+    if phase_shift_flag != nothing
+      break
+    end
+  end
+
+  if phase_shift_flag == nothing
+    println("ERROR: could not determine the source node for phase A")
+    goodbye()
+  end
+
+  # next, create phase_nodenames, phase_shared_nodenames, and phase_set
+  # now that we know how to determine the phase
+  for zone = 0:5
+    phase_nodenames[zone] = Dict()
+
+    for (nodeidx, (magnitude, angle)) in Vnom[zone]
+      node = nodenames[zone][nodeidx]
+
+      # determine the phase based on vnom angle
+      phase = get_phase(angle, phase_shift_flag)
+      if !haskey(phase_nodenames[zone], phase)
+        phase_nodenames[zone][phase] = Vector{String}()
+      end
+      # add the node to the list of nodes for that phase
+      push!(phase_nodenames[zone][phase], node)
+
+      if haskey(shared_nodenames, node)
+        if !haskey(phase_shared_nodenames, phase)
+          phase_shared_nodenames[phase] = Dict()
+        end
+        phase_shared_nodenames[phase][node] = shared_nodenames[node]
+      end
+
+      push!(phase_set, phase)
+    end
+    #println("zone: $(zone), phase_nodenames: $(phase_nodenames[zone])")
+  end
+  #println("phase_set: $(phase_set)")
+  #println("phase_shared_nodenames: $(phase_shared_nodenames)")
+
+  # next, find and validate the system reference zone and node pair per
+  # phase from source nodes
   sysref = Dict()
   for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
     node = row[1]
@@ -428,8 +467,7 @@ function setup_angle_passing(nodename_nodeidx_map, phase_set, phase_nodenames, p
     end
   end
 
-  # second task is determining the zone ordering
-
+  # next, determine the zone ordering
   Zoneorder = Dict()
   Zonerefinfo = Dict()
 
@@ -475,8 +513,7 @@ function setup_angle_passing(nodename_nodeidx_map, phase_set, phase_nodenames, p
     end
     println("Zone ordering dictionary, ZoneorderDict: $(ZoneorderDict)")
 
-    # third task is determining the zone reference nodes
-
+    # finally, determine the zone reference nodes
     Zonerefinfo[phase] = Dict()
 
     for zone = 0:5
@@ -773,19 +810,21 @@ Vnom = Dict()
 nodenames = Dict()
 nodename_nodeidx_map = Dict()
 shared_nodeidx_measidx2_map = Dict()
-phase_nodenames = Dict()
-phase_shared_nodenames = Dict()
-phase_set = Set()
 measdata = Dict()
 
 for zone = 0:5
-  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], phase_nodenames[zone], measdata[zone] = get_input(zone, shared_nodenames, phase_shared_nodenames, phase_set)
+  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
 end
 
 Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
 
-# do the data structure initialization  for reference angle passing
-Zoneorder, Zonerefinfo = setup_angle_passing(nodename_nodeidx_map, phase_set, phase_nodenames, phase_shared_nodenames)
+# do the data structure initialization for reference angle passing
+phase_set = Set()
+phase_nodenames = Dict()
+phase_shared_nodenames = Dict()
+
+Zoneorder, Zonerefinfo = setup_angle_passing(nodenames, nodename_nodeidx_map, Vnom, phase_set, phase_nodenames, phase_shared_nodenames)
+#goodbye()
 
 println("Done parsing input files, start defining optimization problem...")
 
