@@ -12,7 +12,7 @@ function goodbye()
 end
 
 
-function get_input(zone, shared_nodenames)
+function get_input(zone, shared_nodenames, Sharedalways_set)
   println("    Reading input files for zone: $(zone)")
   nodename_nodeidx_map = Dict()
   nodenames = Vector{String}()
@@ -86,31 +86,34 @@ function get_input(zone, shared_nodenames)
     end
 
     if !viFlag
-      println("***missing vi measurement for node index: $(nodeidx)")
       # create new measurement
       imeas2 += 1
       append!(measidxs2["vi"], imeas2)
       measidx2_nodeidx_map[imeas2] = nodeidx
       append!(measidx_vec, imeas2)
       append!(rmat2, 0.01^2)
+      println("***Adding missing vi measurement for zone: $(zone), shared node index: $(nodeidx), meas: $(imeas2)")
+      push!(Sharedalways_set, (zone, imeas2))
     end
     if !PiFlag
-      println("***missing Pi measurement for node index: $(nodeidx)")
       # create new measurement
       imeas2 += 1
       append!(measidxs2["Pi"], imeas2)
       measidx2_nodeidx_map[imeas2] = nodeidx
       append!(measidx_vec, imeas2)
       append!(rmat2, 1.0^2)
+      println("***Adding missing Pi measurement for zone: $(zone), shared node index: $(nodeidx), meas: $(imeas2)")
+      push!(Sharedalways_set, (zone, imeas2))
     end
     if !QiFlag
-      println("***missing Qi measurement for node index: $(nodeidx)")
       # create new measurement
       imeas2 += 1
       append!(measidxs2["Qi"], imeas2)
       measidx2_nodeidx_map[imeas2] = nodeidx
       append!(measidx_vec, imeas2)
       append!(rmat2, 0.5^2)
+      println("***Adding missing Qi measurement zone: $(zone), for shared node index: $(nodeidx), meas: $(imeas2)")
+      push!(Sharedalways_set, (zone, imeas2))
     end
   end
 
@@ -240,7 +243,12 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
 end
 
 
-function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
+function fake_variance_comparison()
+  return true
+end
+
+
+function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, Sharedalways_set, measidxs2, v1, T1, zvec2)
   # for Pi and Qi measurement data exchange, need to compute:
   #   S = V.(Ybus x V)*
   #   where S is complex and the real component is the corresponding Pi value
@@ -270,22 +278,29 @@ function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T
   for (zonedest, Zonemeas) in Sharedmeas
     for (measdest, source) in Zonemeas
       #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
+      # determine whether data sharing should be done
+      if (zonedest, measdest) in Sharedalways_set
+        println("Always sharing data due to newly added measurement for zone: $(zonedest), meas: $(measdest)")
+      elseif fake_variance_comparison()
+        println("Will be comparing variance, for now falling through to data sharing")
+      else
+        # skip data sharing because it doesn't meet previous checks
+        println("Skip sharing data for zone: $(zonedest), meas: $(measdest)")
+        break
+      end
+
       if haskey(measidxs2[zonedest], "vi") && measdest in measidxs2[zonedest]["vi"]
         println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], value.(v1[source[1]][source[2]]))
-        println("*** zone $(zonedest) zvec2 vi exchange for measurement $(measdest): $(value.(v1[source[1]][source[2]]))")
       elseif haskey(measidxs2[zonedest], "Ti") && measdest in measidxs2[zonedest]["Ti"]
         println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T1 value: $(value.(T1[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], value.(T1[source[1]][source[2]]))
-        println("*** zone $(zonedest) zvec2 Ti exchange for measurement $(measdest): $(value.(T1[source[1]][source[2]]))")
       elseif haskey(measidxs2[zonedest], "Pi") && measdest in measidxs2[zonedest]["Pi"]
         println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S real value: $(-1*real(S[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], -1*real(S[source[1]][source[2]]))
-        println("*** zone $(zonedest) zvec2 Pi exchange for measurement $(measdest): $(-1*real(S[source[1]][source[2]]))")
       elseif haskey(measidxs2[zonedest], "Qi") && measdest in measidxs2[zonedest]["Qi"]
         println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S imag value: $(-1*imag(S[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
-        println("*** zone $(zonedest) zvec2 Qi exchange for measurement $(measdest): $(-1*imag(S[source[1]][source[2]]))")
       end
     end
   end
@@ -801,9 +816,10 @@ nodenames = Dict()
 nodename_nodeidx_map = Dict()
 shared_nodeidx_measidx2_map = Dict()
 measdata = Dict()
+Sharedalways_set = Set()
 
 for zone = 0:5
-  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames)
+  measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames, Sharedalways_set)
 end
 
 Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
@@ -922,7 +938,7 @@ for row = 1:nrows # all timestamps
     compare_estimate_angles(T1_updated[zone], nodenames[zone], FPIResults[zone][timestamp], zone, Vnom[zone], StatsAngle1[zone])
   end
 
-  perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
+  perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, Sharedalways_set, measidxs2, v1, T1, zvec2)
 
   # second optimization after shared node data exchange
   for zone = 0:5
