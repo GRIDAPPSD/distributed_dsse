@@ -12,31 +12,6 @@ function goodbye()
 end
 
 
-function close_to(value, check)
-  return value-5.0<=check && value+5.0>=check
-end
-
-
-function get_phase(angle, phase_shift_flag)
-  phase_shift = phase_shift_flag ? 30.0 : 0.0
-
-  # this is a simplified implementation for the test case
-  # to make it fully correct, it should accomodate +30 degree angle shifts
-  # to the source bus nodes and if that shift is present, all other angle
-  # checks should also be shifted that +30 degrees
-  if close_to(angle, 0.0+phase_shift) || close_to(angle, 180.0+phase_shift)
-    return "A"
-  elseif close_to(angle, -120.0+phase_shift) || close_to(angle, 60.0+phase_shift)
-    return "B"
-  elseif close_to(angle, 120.0+phase_shift) || close_to(angle, -60.0+phase_shift)
-    return "C"
-  else
-    println("WARNING: Vnom angle of $(angle) does not map to a phase, defaulting to phase A")
-    return "A"
-  end
-end
-
-
 function get_input(zone, shared_nodenames)
   println("    Reading input files for zone: $(zone)")
   nodename_nodeidx_map = Dict()
@@ -317,9 +292,29 @@ function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T
 end
 
 
+function close_to(value, check)
+  return value-5.0<=check && value+5.0>=check
+end
+
+
+function get_phase(angle, phase_shift_flag)
+  phase_shift = phase_shift_flag ? 30.0 : 0.0
+
+  if close_to(angle, 0.0+phase_shift) || close_to(angle, 180.0+phase_shift)
+    return "A"
+  elseif close_to(angle, -120.0+phase_shift) || close_to(angle, 60.0+phase_shift)
+    return "B"
+  elseif close_to(angle, 120.0+phase_shift) || close_to(angle, -60.0+phase_shift)
+    return "C"
+  else
+    println("WARNING: Vnom angle of $(angle) does not map to a phase, defaulting to phase A")
+    return "A"
+  end
+end
+
+
 function buildZonegraph(parzone, shared_nodenames, Zonenodes, Zonegraph)
   println("buildZonegraph parent zone: $(parzone)")
-  #fake = 0
   for node in Zonenodes[parzone]
     for (zone, nodeidx) in shared_nodenames[node]
       if zone != parzone && !haskey(Zonegraph, zone)
@@ -334,11 +329,6 @@ function buildZonegraph(parzone, shared_nodenames, Zonenodes, Zonegraph)
           push!(Zonegraph[parzone], (zone, length(Zonegraph[zone])))
         else
           push!(Zonegraph[parzone], (zone, 0))
-          #fake += 1
-          #TODO given fake counts, see if we can sort on that tuple element
-          # or if we need to go to a different data structure besides an array
-          # of tuples to allow sorting
-          #push!(Zonegraph[parzone], (zone, fake))
         end
       end
     end
