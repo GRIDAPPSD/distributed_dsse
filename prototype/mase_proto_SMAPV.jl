@@ -193,7 +193,12 @@ function get_input(zone, shared_nodenames, Sharedalways_set)
 end
 
 
-function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
+function fake_variance_comparison()
+  return true
+end
+
+
+function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Sharedalways_set)
   #Sharednodes = Dict()
   Sharedmeas = Dict()
   SharedmeasAlt = Dict()
@@ -208,6 +213,17 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
     #Sharednodes[zone][inode] = value[2]
 
     for imeas in shared_nodeidx_measidx2_map[zone][inode]
+      # determine whether data sharing should be done
+      if (zone, imeas) in Sharedalways_set
+        println("Always sharing data due to newly added measurement for zone: $(zone), meas: $(imeas)")
+      elseif fake_variance_comparison()
+        println("Will be comparing variance, for now falling through to data sharing for zone: $(zone), meas: $(imeas)")
+      else
+        # skip data sharing because it doesn't meet previous checks
+        println("Skip sharing data for zone: $(zone), meas: $(imeas)")
+        continue
+      end
+
       Sharedmeas[zone][imeas] = value[2]
       if zone == 0
         SharedmeasAlt[zone][imeas] = value[2]
@@ -226,6 +242,17 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
     #Sharednodes[zone][inode] = value[1]
 
     for imeas in shared_nodeidx_measidx2_map[zone][inode]
+      # determine whether data sharing should be done
+      if (zone, imeas) in Sharedalways_set
+        println("Always sharing data due to newly added measurement for zone: $(zone), meas: $(imeas)")
+      elseif fake_variance_comparison()
+        println("Will be comparing variance, for now falling through to data sharing for zone: $(zone), meas: $(imeas)")
+      else
+        # skip data sharing because it doesn't meet previous checks
+        println("Skip sharing data for zone: $(zone), meas: $(imeas)")
+        continue
+      end
+
       Sharedmeas[zone][imeas] = value[1]
       if zone == 0
         SharedmeasAlt[zone][imeas] = value[1]
@@ -243,12 +270,7 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
 end
 
 
-function fake_variance_comparison()
-  return true
-end
-
-
-function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, Sharedalways_set, measidxs2, v1, T1, zvec2)
+function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
   # for Pi and Qi measurement data exchange, need to compute:
   #   S = V.(Ybus x V)*
   #   where S is complex and the real component is the corresponding Pi value
@@ -278,17 +300,6 @@ function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, Sharedalways_set
   for (zonedest, Zonemeas) in Sharedmeas
     for (measdest, source) in Zonemeas
       #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
-      # determine whether data sharing should be done
-      if (zonedest, measdest) in Sharedalways_set
-        println("Always sharing data due to newly added measurement for zone: $(zonedest), meas: $(measdest)")
-      elseif fake_variance_comparison()
-        println("Will be comparing variance, for now falling through to data sharing")
-      else
-        # skip data sharing because it doesn't meet previous checks
-        println("Skip sharing data for zone: $(zonedest), meas: $(measdest)")
-        break
-      end
-
       if haskey(measidxs2[zonedest], "vi") && measdest in measidxs2[zonedest]["vi"]
         println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], value.(v1[source[1]][source[2]]))
@@ -822,7 +833,7 @@ for zone = 0:5
   measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames, Sharedalways_set)
 end
 
-Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map)
+Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Sharedalways_set)
 
 # do the data structure initialization for reference angle passing
 phase_set = Set()
@@ -938,7 +949,7 @@ for row = 1:nrows # all timestamps
     compare_estimate_angles(T1_updated[zone], nodenames[zone], FPIResults[zone][timestamp], zone, Vnom[zone], StatsAngle1[zone])
   end
 
-  perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, Sharedalways_set, measidxs2, v1, T1, zvec2)
+  perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
 
   # second optimization after shared node data exchange
   for zone = 0:5
