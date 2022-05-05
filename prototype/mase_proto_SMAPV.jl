@@ -202,6 +202,8 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Share
   #Sharednodes = Dict()
   Sharedmeas = Dict()
   SharedmeasAlt = Dict()
+  Secondestimate_set = Set()
+
   for (key, value) in shared_nodenames
     zone = value[1][1]
     inode = value[1][2]
@@ -230,6 +232,7 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Share
       else
         SharedmeasAlt[zone][imeas] = value[1]
       end
+      push!(Secondestimate_set, zone)
     end
 
     zone = value[2][1]
@@ -259,14 +262,16 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Share
       else
         SharedmeasAlt[zone][imeas] = value[2]
       end
+      push!(Secondestimate_set, zone)
     end
   end
   println("Shared nodenames dictionary: $(shared_nodenames)\n")
   #println("Sharednodes dictionary: $(Sharednodes)\n")
   println("Sharedmeas dictionary: $(Sharedmeas)\n")
   println("SharedmeasAlt dictionary: $(SharedmeasAlt)\n")
+  println("Secondestimate_set: $(Secondestimate_set)\n")
 
-  return Sharedmeas, SharedmeasAlt
+  return Sharedmeas, SharedmeasAlt, Secondestimate_set
 end
 
 
@@ -833,7 +838,7 @@ for zone = 0:5
   measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames, Sharedalways_set)
 end
 
-Sharedmeas, SharedmeasAlt = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Sharedalways_set)
+Sharedmeas, SharedmeasAlt, Secondestimate_set = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Sharedalways_set)
 
 # do the data structure initialization for reference angle passing
 phase_set = Set()
@@ -906,8 +911,8 @@ nrows = length(measdata[0])
 println("number of timestamps to process: $(nrows)")
 
 ntimestamps = 0
-#for row = 1:1 # first timestamp only
-for row = 1:nrows # all timestamps
+for row = 1:1 # first timestamp only
+#for row = 1:nrows # all timestamps
   global ntimestamps += 1
 
   for zone = 0:5
@@ -952,7 +957,7 @@ for row = 1:nrows # all timestamps
   perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
 
   # second optimization after shared node data exchange
-  for zone = 0:5
+  for zone in Secondestimate_set
     println("\n================================================================================")
     println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
     perform_estimate(nlp2[zone], v2[zone], T2[zone])
