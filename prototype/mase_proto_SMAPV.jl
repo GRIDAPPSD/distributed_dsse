@@ -215,9 +215,9 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Share
     for imeas in shared_nodeidx_measidx2_map[zone][inode]
       # determine whether data sharing should be done
       if (zone, imeas) in Sharedalways_set
-        println("Always sharing data due to newly added measurement for zone: $(zone), meas: $(imeas)")
+        println("Always sharing data due to newly added measurement for destzone: $(zone), destmeas: $(imeas), sourcezone: $(value[2][1]), sourcenodeidx: $(value[2][2])")
       elseif fake_variance_comparison()
-        println("Will be comparing variance, for now falling through to data sharing for zone: $(zone), meas: $(imeas)")
+        println("Will be comparing variance, for now falling through to data sharing for destzone: $(zone), destmeas: $(imeas), sourcezone: $(value[2][1]), sourcenodeidx: $(value[2][2])")
       else
         # skip data sharing because it doesn't meet previous checks
         println("Skip sharing data for zone: $(zone), meas: $(imeas)")
@@ -244,9 +244,9 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Share
     for imeas in shared_nodeidx_measidx2_map[zone][inode]
       # determine whether data sharing should be done
       if (zone, imeas) in Sharedalways_set
-        println("Always sharing data due to newly added measurement for zone: $(zone), meas: $(imeas)")
+        println("Always reverse sharing data due to newly added measurement for destzone: $(zone), destmeas: $(imeas), sourcezone: $(value[1][1]), sourcenodeidx: $(value[1][2])")
       elseif fake_variance_comparison()
-        println("Will be comparing variance, for now falling through to data sharing for zone: $(zone), meas: $(imeas)")
+        println("Will be comparing variance, for now falling through to reverse data sharing for destzone: $(zone), destmeas: $(imeas), sourcezone: $(value[1][1]), sourcenodeidx: $(value[1][2])")
       else
         # skip data sharing because it doesn't meet previous checks
         println("Skip sharing data for zone: $(zone), meas: $(imeas)")
@@ -301,16 +301,16 @@ function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T
     for (measdest, source) in Zonemeas
       #println("OLD measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
       if haskey(measidxs2[zonedest], "vi") && measdest in measidxs2[zonedest]["vi"]
-        println("vi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), v1 value: $(value.(v1[source[1]][source[2]]))")
+        println("vi measurement value sharing destzone: $(zonedest), destmeas: $(measdest), sourcezone: $(source[1]), sourcenode: $(source[2]), v1 sourcevalue: $(value.(v1[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], value.(v1[source[1]][source[2]]))
       elseif haskey(measidxs2[zonedest], "Ti") && measdest in measidxs2[zonedest]["Ti"]
-        println("Ti measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), T1 value: $(value.(T1[source[1]][source[2]]))")
+        println("Ti measurement value sharing destzone: $(zonedest), destmeas: $(measdest), sourcezone: $(source[1]), sourcenode: $(source[2]), T1 sourcevalue: $(value.(T1[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], value.(T1[source[1]][source[2]]))
       elseif haskey(measidxs2[zonedest], "Pi") && measdest in measidxs2[zonedest]["Pi"]
-        println("Pi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S real value: $(-1*real(S[source[1]][source[2]]))")
+        println("Pi measurement value sharing destzone: $(zonedest), destmeas: $(measdest), sourcezone: $(source[1]), sourcenode: $(source[2]), -S real sourcevalue: $(-1*real(S[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], -1*real(S[source[1]][source[2]]))
       elseif haskey(measidxs2[zonedest], "Qi") && measdest in measidxs2[zonedest]["Qi"]
-        println("Qi measurement value sharing destination zone: $(zonedest), meas: $(measdest), source zone: $(source[1]), node: $(source[2]), -S imag value: $(-1*imag(S[source[1]][source[2]]))")
+        println("Qi measurement value sharing destzone: $(zonedest), destmeas: $(measdest), sourcezone: $(source[1]), sourcenode: $(source[2]), -S imag sourcevalue: $(-1*imag(S[source[1]][source[2]]))")
         set_value(zvec2[zonedest][measdest], -1*imag(S[source[1]][source[2]]))
       end
     end
