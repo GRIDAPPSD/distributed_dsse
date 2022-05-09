@@ -275,7 +275,7 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Share
 end
 
 
-function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
+function perform_data_sharing(nzones, Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
   # for Pi and Qi measurement data exchange, need to compute:
   #   S = V.(Ybus x V)*
   #   where S is complex and the real component is the corresponding Pi value
@@ -288,7 +288,7 @@ function perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T
   #   The "*" operation is complex conjugate
   #   Ybus will be created as a dense matrix for the initial implementation
   S = Dict()
-  for zone = 0:5
+  for zone = 0:nzones-1
     nnode = length(v1[zone]) # get number of nodes from # of v1 elements
 
     V = Vector{ComplexF64}(undef, nnode)
@@ -385,7 +385,7 @@ function buildZoneorder(parzone, Zonegraph, Zoneorder)
 end
 
 
-function setup_angle_passing(nodenames, nodename_nodeidx_map, Vnom, phase_set, phase_nodenames, phase_shared_nodenames)
+function setup_angle_passing(nzones, nodenames, nodename_nodeidx_map, Vnom, phase_set, phase_nodenames, phase_shared_nodenames)
 
   # first, determine if vnom angles are shifted 30 degrees based on the phase
   # A source node, thus allowing the phases of all other nodes to be determined
@@ -393,7 +393,7 @@ function setup_angle_passing(nodenames, nodename_nodeidx_map, Vnom, phase_set, p
 
   for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
     node = row[1]
-    for zone = 0:5
+    for zone = 0:nzones-1
       if haskey(nodename_nodeidx_map[zone], node)
         angle = Vnom[zone][nodename_nodeidx_map[zone][node]][2]
         if close_to(angle, 0.0)
@@ -417,7 +417,7 @@ function setup_angle_passing(nodenames, nodename_nodeidx_map, Vnom, phase_set, p
 
   # next, create phase_nodenames, phase_shared_nodenames, and phase_set
   # now that we know how to determine the phase
-  for zone = 0:5
+  for zone = 0:nzones-1
     phase_nodenames[zone] = Dict()
 
     for (nodeidx, (magnitude, angle)) in Vnom[zone]
@@ -450,7 +450,7 @@ function setup_angle_passing(nodenames, nodename_nodeidx_map, Vnom, phase_set, p
   sysref = Dict()
   for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
     node = row[1]
-    for zone = 0:5
+    for zone = 0:nzones-1
       if haskey(nodename_nodeidx_map[zone], node)
         # find the phase for the node
         for (phase, phasenodes) in phase_nodenames[zone]
@@ -537,7 +537,7 @@ function setup_angle_passing(nodenames, nodename_nodeidx_map, Vnom, phase_set, p
     # finally, determine the zone reference nodes
     Zonerefinfo[phase] = Dict()
 
-    for zone = 0:5
+    for zone = 0:nzones-1
       if zone == refzone
         # for the system reference zone, the zone reference node is always
         # the system reference node
@@ -570,11 +570,11 @@ function setup_angle_passing(nodenames, nodename_nodeidx_map, Vnom, phase_set, p
 end
 
 
-function perform_angle_passing(T, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
+function perform_angle_passing(nzones, T, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
   # store the updated angles after reference angle passing in a new data
   # structure because I can't update the JuMP T solution vector
   T_updated = Dict()
-  for zone = 0:5
+  for zone = 0:nzones-1
     # declare and allocate the per zone vectors for the updated angles
     T_updated[zone] = Vector{Float64}(undef, length(nodename_nodeidx_map[zone]))
   end
@@ -810,14 +810,14 @@ function compare_estimate_angles(T, nodenames, FPIResults, zone, Vnom, StatsAngl
 end
 
 
-function compute_stats(nodenames, StatsMagnitude2, StatsAngle2)
+function compute_stats(nzones, nodenames, StatsMagnitude2, StatsAngle2)
   mag_max_max = 0.0
   mag_max_max_zone = ""
   mag_max_max_node = ""
   mag_max_mean = 0.0
   mag_max_mean_zone = ""
   mag_max_mean_node = ""
-  for zone = 0:5
+  for zone = 0:nzones-1
     println("\n2nd optimization magnitude min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
     for inode = 1:length(nodenames[zone])
       mean = StatsMagnitude2[zone][inode]["sum"]/ntimestamps
@@ -841,7 +841,7 @@ function compute_stats(nodenames, StatsMagnitude2, StatsAngle2)
   angle_max_mean = 0.0
   angle_max_mean_zone = ""
   angle_max_mean_node = ""
-  for zone = 0:5
+  for zone = 0:nzones-1
     println("\n2nd optimization angle min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
     for inode = 1:length(nodenames[zone])
       mean = StatsAngle2[zone][inode]["sum"]/ntimestamps
@@ -874,6 +874,11 @@ end
 
 println("Start parsing input files...")
 
+# determine the number of zones for the test case based on the number of
+# nodelist.csv files
+# assume they are indexed 0 through nzones-1
+nzones = length(filter(x->startswith(x, "nodelist.csv."), cd(readdir, test_dir)))
+
 shared_nodenames = Dict()
 for row in CSV.File(test_dir*"/sharednodes.csv", header=false)
   shared_nodenames[row[1]] = []
@@ -894,7 +899,7 @@ shared_nodeidx_measidx2_map = Dict()
 measdata = Dict()
 Sharedalways_set = Set()
 
-for zone = 0:5
+for zone = 0:nzones-1
   measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames, Sharedalways_set)
 end
 
@@ -905,7 +910,7 @@ phase_set = Set()
 phase_nodenames = Dict()
 phase_shared_nodenames = Dict()
 
-Zoneorder, Zonerefinfo = setup_angle_passing(nodenames, nodename_nodeidx_map, Vnom, phase_set, phase_nodenames, phase_shared_nodenames)
+Zoneorder, Zonerefinfo = setup_angle_passing(nzones, nodenames, nodename_nodeidx_map, Vnom, phase_set, phase_nodenames, phase_shared_nodenames)
 #goodbye()
 
 println("Done parsing input files, start defining optimization problem...")
@@ -919,7 +924,7 @@ v2 = Dict()
 T1 = Dict()
 T2 = Dict()
 
-for zone = 0:5
+for zone = 0:nzones-1
   nlp1[zone], zvec1[zone], v1[zone], T1[zone] = setup_estimate(measidxs1[zone], measidx1_nodeidx_map[zone], rmat1[zone], Ybus[zone], Vnom[zone])
   nlp2[zone], zvec2[zone], v2[zone], T2[zone] = setup_estimate(measidxs2[zone], measidx2_nodeidx_map[zone], rmat2[zone], Ybus[zone], Vnom[zone])
 end
@@ -930,7 +935,7 @@ StatsMagnitude2 = Dict()
 StatsAngle1 = Dict()
 StatsAngle2 = Dict()
 
-for zone = 0:5
+for zone = 0:nzones-1
   FPIResults[zone] = Dict()
   StatsMagnitude1[zone] = Dict()
   StatsMagnitude2[zone] = Dict()
@@ -971,11 +976,11 @@ nrows = length(measdata[0])
 println("number of timestamps to process: $(nrows)")
 
 ntimestamps = 0
-for row = 1:1 # first timestamp only
-#for row = 1:nrows # all timestamps
+#for row = 1:1 # first timestamp only
+for row = 1:nrows # all timestamps
   global ntimestamps += 1
 
-  for zone = 0:5
+  for zone = 0:nzones-1
     # This logic assumes that the order of measurement data (columns in a row)
     # is the same as measurement order (rows) in measurements.csv
     # If that's not the case, then this will require rework
@@ -989,7 +994,7 @@ for row = 1:1 # first timestamp only
   end
 
   # first optimization for each zone
-  for zone = 0:5
+  for zone = 0:nzones-1
     println("\n================================================================================")
     println("1st optimization for timestamp #$(row), zone: $(zone)\n")
     perform_estimate(nlp1[zone], v1[zone], T1[zone])
@@ -998,23 +1003,23 @@ for row = 1:1 # first timestamp only
   # perform reference angle passing to get the final angle results
   println("\n================================================================================")
   println("Reference angle passing:")
-  T1_updated = perform_angle_passing(T1, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
+  T1_updated = perform_angle_passing(nzones, T1, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
 
-  for zone = 0:5
+  for zone = 0:nzones-1
     timestamp = measdata[zone][row][1]
     println("\n================================================================================")
     println("1st optimization magnitude comparison for timestamp $(timestamp), zone: $(zone)\n")
     compare_estimate_magnitudes(v1[zone], nodenames[zone], FPIResults[zone][timestamp], zone, StatsMagnitude1[zone])
   end
 
-  for zone = 0:5
+  for zone = 0:nzones-1
     timestamp = measdata[zone][row][1]
     println("\n================================================================================")
     println("1st optimization angle comparison for timestamp $(timestamp), zone: $(zone)\n")
     compare_estimate_angles(T1_updated[zone], nodenames[zone], FPIResults[zone][timestamp], zone, Vnom[zone], StatsAngle1[zone])
   end
 
-  perform_data_sharing(Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
+  perform_data_sharing(nzones, Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
 
   # second optimization after shared node data exchange
   for zone in Secondestimate_set
@@ -1026,16 +1031,16 @@ for row = 1:1 # first timestamp only
   # perform reference angle passing to get the final angle results
   println("\n================================================================================")
   println("Reference angle passing:")
-  T2_updated = perform_angle_passing(T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
+  T2_updated = perform_angle_passing(nzones, T2, Zoneorder, Zonerefinfo, nodename_nodeidx_map, phase_set, phase_nodenames)
 
-  for zone = 0:5
+  for zone = 0:nzones-1
     timestamp = measdata[zone][row][1]
     println("\n================================================================================")
     println("2nd optimization magnitude comparison for timestamp $(timestamp), zone: $(zone)\n")
     compare_estimate_magnitudes(v2[zone], nodenames[zone], FPIResults[zone][timestamp], zone, StatsMagnitude2[zone])
   end
 
-  for zone = 0:5
+  for zone = 0:nzones-1
     timestamp = measdata[zone][row][1]
     println("\n================================================================================")
     println("2nd optimization angle comparison for timestamp $(timestamp), zone: $(zone)\n")
@@ -1043,5 +1048,5 @@ for row = 1:1 # first timestamp only
   end
 end
 
-compute_stats(nodenames, StatsMagnitude2, StatsAngle2)
+compute_stats(nzones, nodenames, StatsMagnitude2, StatsAngle2)
 
