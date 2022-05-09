@@ -810,6 +810,66 @@ function compare_estimate_angles(T, nodenames, FPIResults, zone, Vnom, StatsAngl
 end
 
 
+function compute_stats(nodenames, StatsMagnitude2, StatsAngle2)
+  mag_max_max = 0.0
+  mag_max_max_zone = ""
+  mag_max_max_node = ""
+  mag_max_mean = 0.0
+  mag_max_mean_zone = ""
+  mag_max_mean_node = ""
+  for zone = 0:5
+    println("\n2nd optimization magnitude min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
+    for inode = 1:length(nodenames[zone])
+      mean = StatsMagnitude2[zone][inode]["sum"]/ntimestamps
+      println("""  $(nodenames[zone][inode]): $(StatsMagnitude2[zone][inode]["min"]), $(StatsMagnitude2[zone][inode]["max"]), $(mean)""")
+      if StatsMagnitude2[zone][inode]["max"] > mag_max_max
+        mag_max_max = StatsMagnitude2[zone][inode]["max"]
+        mag_max_max_zone = zone
+        mag_max_max_node = nodenames[zone][inode]
+      end
+      if mean > mag_max_mean
+        mag_max_mean = mean
+        mag_max_mean_zone = zone
+        mag_max_mean_node = nodenames[zone][inode]
+      end
+    end
+  end
+
+  angle_max_max = 0.0
+  angle_max_max_zone = ""
+  angle_max_max_node = ""
+  angle_max_mean = 0.0
+  angle_max_mean_zone = ""
+  angle_max_mean_node = ""
+  for zone = 0:5
+    println("\n2nd optimization angle min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
+    for inode = 1:length(nodenames[zone])
+      mean = StatsAngle2[zone][inode]["sum"]/ntimestamps
+      println("""  $(nodenames[zone][inode]): $(StatsAngle2[zone][inode]["min"]), $(StatsAngle2[zone][inode]["max"]), $(mean)""")
+      if StatsAngle2[zone][inode]["max"] > angle_max_max
+        angle_max_max = StatsAngle2[zone][inode]["max"]
+        angle_max_max_zone = zone
+        angle_max_max_node = nodenames[zone][inode]
+      end
+      if mean > angle_max_mean
+        angle_max_mean = mean
+        angle_max_mean_zone = zone
+        angle_max_mean_node = nodenames[zone][inode]
+      end
+    end
+  end
+
+  # convert to degrees because it's easier when dealing with small values
+  angle_max_max = rad2deg(angle_max_max)
+  angle_max_mean = rad2deg(angle_max_mean)
+
+  println("\n2nd optimization magnitude max difference zone: $(mag_max_max_zone), node: $(mag_max_max_node), value: $(mag_max_max)")
+  println("2nd optimization magnitude max mean difference zone: $(mag_max_mean_zone), node: $(mag_max_mean_node), value: $(mag_max_mean)")
+  println("2nd optimization angle max difference zone: $(angle_max_max_zone), node: $(angle_max_max_node), value: $(angle_max_max)")
+  println("2nd optimization angle max mean difference zone: $(angle_max_mean_zone), node: $(angle_max_mean_node), value: $(angle_max_mean)")
+end
+
+
 # Main
 
 println("Start parsing input files...")
@@ -983,64 +1043,5 @@ for row = 1:1 # first timestamp only
   end
 end
 
-mag_max_max = 0.0
-mag_max_max_zone = ""
-mag_max_max_node = ""
-mag_max_mean = 0.0
-mag_max_mean_zone = ""
-mag_max_mean_node = ""
-for zone = 0:5
-  println("\n2nd optimization magnitude min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
-  for inode = 1:length(nodenames[zone])
-    global mag_max_max, mag_max_max_zone, mag_max_max_node
-    global mag_max_mean, mag_max_mean_zone, mag_max_mean_node
-    mean = StatsMagnitude2[zone][inode]["sum"]/ntimestamps
-    println("""  $(nodenames[zone][inode]): $(StatsMagnitude2[zone][inode]["min"]), $(StatsMagnitude2[zone][inode]["max"]), $(mean)""")
-    if StatsMagnitude2[zone][inode]["max"] > mag_max_max
-      mag_max_max = StatsMagnitude2[zone][inode]["max"]
-      mag_max_max_zone = zone
-      mag_max_max_node = nodenames[zone][inode]
-    end
-    if mean > mag_max_mean
-      mag_max_mean = mean
-      mag_max_mean_zone = zone
-      mag_max_mean_node = nodenames[zone][inode]
-    end
-  end
-end
-
-angle_max_max = 0.0
-angle_max_max_zone = ""
-angle_max_max_node = ""
-angle_max_mean = 0.0
-angle_max_mean_zone = ""
-angle_max_mean_node = ""
-for zone = 0:5
-  println("\n2nd optimization angle min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
-  for inode = 1:length(nodenames[zone])
-    global angle_max_max, angle_max_max_zone, angle_max_max_node
-    global angle_max_mean, angle_max_mean_zone, angle_max_mean_node
-    mean = StatsAngle2[zone][inode]["sum"]/ntimestamps
-    println("""  $(nodenames[zone][inode]): $(StatsAngle2[zone][inode]["min"]), $(StatsAngle2[zone][inode]["max"]), $(mean)""")
-    if StatsAngle2[zone][inode]["max"] > angle_max_max
-      angle_max_max = StatsAngle2[zone][inode]["max"]
-      angle_max_max_zone = zone
-      angle_max_max_node = nodenames[zone][inode]
-    end
-    if mean > angle_max_mean
-      angle_max_mean = mean
-      angle_max_mean_zone = zone
-      angle_max_mean_node = nodenames[zone][inode]
-    end
-  end
-end
-
-# convert to degrees because it's easier when dealing with small values
-angle_max_max = rad2deg(angle_max_max)
-angle_max_mean = rad2deg(angle_max_mean)
-
-println("\n2nd optimization magnitude max difference zone: $(mag_max_max_zone), node: $(mag_max_max_node), value: $(mag_max_max)")
-println("2nd optimization magnitude max mean difference zone: $(mag_max_mean_zone), node: $(mag_max_mean_node), value: $(mag_max_mean)")
-println("2nd optimization angle max difference zone: $(angle_max_max_zone), node: $(angle_max_max_node), value: $(angle_max_max)")
-println("2nd optimization angle max mean difference zone: $(angle_max_mean_zone), node: $(angle_max_mean_node), value: $(angle_max_mean)")
+compute_stats(nodenames, StatsMagnitude2, StatsAngle2)
 
