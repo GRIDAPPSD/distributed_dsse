@@ -4,6 +4,8 @@ using Ipopt
 using CSV
 using SparseArrays
 
+import Base.Threads.@spawn
+
 test_dir = "mase_files_pu"
 
 
@@ -752,6 +754,17 @@ function perform_estimate(nlp, v, T)
 end
 
 
+function perform_estimate_spawn(nlp, v, T)
+  # call solver given everything is setup coming in
+  #@time optimize!(nlp)
+  optimize!(nlp)
+  #solution_summary(nlp, verbose=true)
+  #println("\nSolution v = $(value.(v))")
+  #println("\nSolution T = $(value.(T))")
+  return (v, T)
+end
+
+
 function compare_estimate_magnitudes(v, nodenames, FPIResults, zone, StatsMagnitude)
   toterr = 0.0
   nnode = length(v) # get number of nodes from # of v elements
@@ -975,6 +988,8 @@ println("\nDone defining optimization problem, start solving it...")
 nrows = length(measdata[0])
 println("number of timestamps to process: $(nrows)")
 
+spawnDict = Dict()
+
 ntimestamps = 0
 #for row = 1:1 # first timestamp only
 for row = 1:nrows # all timestamps
@@ -995,9 +1010,19 @@ for row = 1:nrows # all timestamps
 
   # first optimization for each zone
   for zone = 0:nzones-1
-    println("\n================================================================================")
-    println("1st optimization for timestamp #$(row), zone: $(zone)\n")
-    perform_estimate(nlp1[zone], v1[zone], T1[zone])
+    #println("\n================================================================================")
+    #println("1st optimization for timestamp #$(row), zone: $(zone)\n")
+    #perform_estimate(nlp1[zone], v1[zone], T1[zone])
+    spawnDict[zone] = @spawn perform_estimate_spawn(nlp1[zone], v1[zone], T1[zone])
+  end
+
+  # fetch call over all zones insures we have full results back as fetch will block
+  # until the spawned function is complete
+  for zone = 0:nzones-1
+    (v1[zone], T1[zone]) = fetch(spawnDict[zone])
+    println("\n1st optimization for timestamp #$(row), zone: $(zone):")
+    println("    Solution v = $(value.(v1[zone]))")
+    println("    Solution T = $(value.(T1[zone]))")
   end
 
   # perform reference angle passing to get the final angle results
@@ -1023,9 +1048,20 @@ for row = 1:nrows # all timestamps
 
   # second optimization after shared node data exchange
   for zone in Secondestimate_set
-    println("\n================================================================================")
-    println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
-    perform_estimate(nlp2[zone], v2[zone], T2[zone])
+    #println("\n================================================================================")
+    #println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
+    #perform_estimate(nlp2[zone], v2[zone], T2[zone])
+    #(v2[zone], T2[zone]) = perform_estimate_spawn(nlp2[zone], v2[zone], T2[zone])
+    spawnDict[zone] = @spawn perform_estimate_spawn(nlp2[zone], v2[zone], T2[zone])
+  end
+
+  # fetch call over all zones insures we have full results back as fetch will block
+  # until the spawned function is complete
+  for zone = 0:nzones-1
+    (v2[zone], T2[zone]) = fetch(spawnDict[zone])
+    println("\n2nd optimization for timestamp #$(row), zone: $(zone):")
+    println("    Solution v = $(value.(v2[zone]))")
+    println("    Solution T = $(value.(T2[zone]))")
   end
 
   # perform reference angle passing to get the final angle results
