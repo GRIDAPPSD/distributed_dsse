@@ -279,6 +279,9 @@ function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Share
   println("SharedmeasAlt dictionary: $(SharedmeasAlt)\n")
   println("Secondestimate_set: $(Secondestimate_set)\n")
 
+  # Calculate variance predictor, SP, for each zone since our WLS optimization does not
+  # find variance
+
   return Sharedmeas, SharedmeasAlt, Secondestimate_set
 end
 
@@ -657,7 +660,11 @@ end
 #     with any tolerance value
 
 function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
-  nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>1000,"linear_solver"=>"mumps"))
+  # offhand print_level=>2 doesn't seem any different than print_level=>0, but maybe if
+  # there are any issues with converging, it will tell me about them when 0 won't
+  # with print_level=>3 or greater there is just a lot of output that likely isn't needed
+  nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>1000,"linear_solver"=>"mumps","print_level"=>2))
+  #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8,"acceptable_tol"=>1e-8,"max_iter"=>1000,"linear_solver"=>"mumps"))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-8))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer)) # tol default to 1e-8 and acceptable_tol defaults to 1e-6
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10))
@@ -764,10 +771,12 @@ function perform_estimate_parallel(nlp, v, T)
   # call solver given everything is setup coming in
   # don't do the diagnostic output with this version because it's executed asynchronously
   # and could get quite confusing
-  optimize!(nlp)
-  # need to return the updated solution vectors so that they can be "fetched" when the
+  # need to return a value so there is something to "fetch" when the
   # spawned thread finishes
-  return (v, T)
+  # the values that are actually computed from the optimization, v and T, are updated
+  # without returning them
+  # returning the time the optimization took is a clever way to get benchmarking data
+  return @elapsed optimize!(nlp)
 end
 
 
@@ -997,8 +1006,8 @@ println("number of timestamps to process: $(nrows)")
 spawnedFunctionDict = Dict()
 
 ntimestamps = 0
-#for row = 1:1 # first timestamp only
-for row = 1:nrows # all timestamps
+for row = 1:1 # first timestamp only
+#for row = 1:nrows # all timestamps
   global ntimestamps += 1
 
   for zone = 0:nzones-1
@@ -1023,8 +1032,8 @@ for row = 1:nrows # all timestamps
     # fetch call over all zones insures we have full results back as fetch will block
     # until the spawned function is complete
     for zone = 0:nzones-1
-      (v1[zone], T1[zone]) = fetch(spawnedFunctionDict[zone])
-      println("\n1st optimization for timestamp #$(row), zone: $(zone):")
+      optime = fetch(spawnedFunctionDict[zone])
+      println("\n1st optimization for timestamp #$(row), zone: $(zone), time: $(optime)")
       println("    Solution v = $(value.(v1[zone]))")
       println("    Solution T = $(value.(T1[zone]))")
     end
@@ -1066,8 +1075,8 @@ for row = 1:nrows # all timestamps
     # fetch call over all zones insures we have full results back as fetch will block
     # until the spawned function is complete
     for zone = 0:nzones-1
-      (v2[zone], T2[zone]) = fetch(spawnedFunctionDict[zone])
-      println("\n2nd optimization for timestamp #$(row), zone: $(zone):")
+      optime = fetch(spawnedFunctionDict[zone])
+      println("\n2nd optimization for timestamp #$(row), zone: $(zone), time: $(optime)")
       println("    Solution v = $(value.(v2[zone]))")
       println("    Solution T = $(value.(T2[zone]))")
     end
