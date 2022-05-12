@@ -20,7 +20,7 @@ function get_input(zone, shared_nodenames, Sharedalways_set)
   nodenames = Vector{String}()
 
   inode = 0
-  for row in CSV.File(string(test_dir, "/nodelist.csv.", zone), header=false)
+  for row in CSV.File(string(test_dir, "/nodelist.csv.", zone), header=false, ntasks=1)
     inode += 1
     nodename_nodeidx_map[row[1]] = inode
     push!(nodenames, row[1])
@@ -42,7 +42,7 @@ function get_input(zone, shared_nodenames, Sharedalways_set)
   rmat2 = Vector{Float64}()
 
   imeas1 = 0
-  for row in CSV.File(string(test_dir, "/measurements.csv.", zone))
+  for row in CSV.File(string(test_dir, "/measurements.csv.", zone), ntasks=1)
     # columns: sensor_type[1],sensor_name[2],node1[3],node2[4],value[5],sigma[6],is_pseudo[7],nom_value[8]
 
     stype = row[1]
@@ -168,7 +168,7 @@ function get_input(zone, shared_nodenames, Sharedalways_set)
   #YbusG = spzeros(Float64, inode, inode)
   #YbusB = spzeros(Float64, inode, inode)
   ibus = 0
-  for row in CSV.File(string(test_dir, "/ysparse.csv.", zone))
+  for row in CSV.File(string(test_dir, "/ysparse.csv.", zone), ntasks=1)
     if !haskey(Ybus, row[1])
       Ybus[row[1]] = Dict()
     end
@@ -181,7 +181,7 @@ function get_input(zone, shared_nodenames, Sharedalways_set)
   println("    Ybus number of lower diagonal elements: $(ibus)")
 
   Vnom = Dict()
-  for row in CSV.File(string(test_dir, "/vnom.csv.", zone))
+  for row in CSV.File(string(test_dir, "/vnom.csv.", zone), ntasks=1)
     node = row[1]
     if haskey(nodename_nodeidx_map, node)
       Vnom[nodename_nodeidx_map[node]] = (row[2], row[3])
@@ -189,7 +189,7 @@ function get_input(zone, shared_nodenames, Sharedalways_set)
   end
   println("    Vnom number of elements: $(length(Vnom))")
 
-  measdata = CSV.File(string(test_dir, "/measurement_data.csv.", zone))
+  measdata = CSV.File(string(test_dir, "/measurement_data.csv.", zone), ntasks=1)
 
   return measidxs1, measidxs2, measidx1_nodeidx_map, measidx2_nodeidx_map, rmat1, rmat2, Ybus, Ybusp, Vnom, nodenames, nodename_nodeidx_map, shared_nodeidx_measidx2_map, measdata
 end
@@ -393,7 +393,7 @@ function setup_angle_passing(nzones, nodenames, nodename_nodeidx_map, Vnom, phas
   # A source node, thus allowing the phases of all other nodes to be determined
   phase_shift_flag = nothing
 
-  for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
+  for row in CSV.File(test_dir*"/sourcenodes.csv", header=false, ntasks=1)
     node = row[1]
     for zone = 0:nzones-1
       if haskey(nodename_nodeidx_map[zone], node)
@@ -450,7 +450,7 @@ function setup_angle_passing(nzones, nodenames, nodename_nodeidx_map, Vnom, phas
   # next, find and validate the system reference zone and node pair per
   # phase from source nodes
   sysref = Dict()
-  for row in CSV.File(test_dir*"/sourcenodes.csv", header=false)
+  for row in CSV.File(test_dir*"/sourcenodes.csv", header=false, ntasks=1)
     node = row[1]
     for zone = 0:nzones-1
       if haskey(nodename_nodeidx_map[zone], node)
@@ -893,7 +893,7 @@ println("Start parsing input files...")
 nzones = length(filter(x->startswith(x, "nodelist.csv."), cd(readdir, test_dir)))
 
 shared_nodenames = Dict()
-for row in CSV.File(test_dir*"/sharednodes.csv", header=false)
+for row in CSV.File(test_dir*"/sharednodes.csv", header=false, ntasks=1)
   shared_nodenames[row[1]] = []
 end
 
@@ -955,7 +955,7 @@ for zone = 0:nzones-1
   StatsAngle1[zone] = Dict()
   StatsAngle2[zone] = Dict()
   nnode = length(Vnom[zone]) # get number of nodes from # of Vnom elements
-  for row in CSV.File(string(test_dir, "/t_FPI_results_data.csv.", zone), header=true)
+  for row in CSV.File(string(test_dir, "/t_FPI_results_data.csv.", zone), header=true, ntasks=1)
     timestamp = row[1]
     FPIResults[zone][timestamp] = Dict()
     for inode = 1:nnode
