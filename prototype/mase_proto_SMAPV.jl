@@ -6,9 +6,15 @@ using SparseArrays
 
 import Base.Threads.@spawn
 
+# where the input files live
 test_dir = "mase_files_pu"
 
+# perform optimizations in parallel or sequentially
+parallelOptimizationsFlag = true
 
+
+# quick way to bail if there are issues
+# unfortunately this exits the Julia shell as well, but I can't find a way around that
 function goodbye()
   ccall(:jl_exit, Cvoid, (Int32,), 86)
 end
@@ -754,13 +760,13 @@ function perform_estimate(nlp, v, T)
 end
 
 
-function perform_estimate_spawn(nlp, v, T)
+function perform_estimate_parallel(nlp, v, T)
   # call solver given everything is setup coming in
-  #@time optimize!(nlp)
+  # don't do the diagnostic output with this version because it's executed asynchronously
+  # and could get quite confusing
   optimize!(nlp)
-  #solution_summary(nlp, verbose=true)
-  #println("\nSolution v = $(value.(v))")
-  #println("\nSolution T = $(value.(T))")
+  # need to return the updated solution vectors so that they can be "fetched" when the
+  # spawned thread finishes
   return (v, T)
 end
 
@@ -988,7 +994,7 @@ println("\nDone defining optimization problem, start solving it...")
 nrows = length(measdata[0])
 println("number of timestamps to process: $(nrows)")
 
-spawnDict = Dict()
+spawnedFunctionDict = Dict()
 
 ntimestamps = 0
 #for row = 1:1 # first timestamp only
@@ -1009,20 +1015,25 @@ for row = 1:nrows # all timestamps
   end
 
   # first optimization for each zone
-  for zone = 0:nzones-1
-    #println("\n================================================================================")
-    #println("1st optimization for timestamp #$(row), zone: $(zone)\n")
-    #perform_estimate(nlp1[zone], v1[zone], T1[zone])
-    spawnDict[zone] = @spawn perform_estimate_spawn(nlp1[zone], v1[zone], T1[zone])
-  end
+  if parallelOptimizationsFlag
+    for zone = 0:nzones-1
+      spawnedFunctionDict[zone] = @spawn perform_estimate_parallel(nlp1[zone], v1[zone], T1[zone])
+    end
 
-  # fetch call over all zones insures we have full results back as fetch will block
-  # until the spawned function is complete
-  for zone = 0:nzones-1
-    (v1[zone], T1[zone]) = fetch(spawnDict[zone])
-    println("\n1st optimization for timestamp #$(row), zone: $(zone):")
-    println("    Solution v = $(value.(v1[zone]))")
-    println("    Solution T = $(value.(T1[zone]))")
+    # fetch call over all zones insures we have full results back as fetch will block
+    # until the spawned function is complete
+    for zone = 0:nzones-1
+      (v1[zone], T1[zone]) = fetch(spawnedFunctionDict[zone])
+      println("\n1st optimization for timestamp #$(row), zone: $(zone):")
+      println("    Solution v = $(value.(v1[zone]))")
+      println("    Solution T = $(value.(T1[zone]))")
+    end
+  else
+    for zone = 0:nzones-1
+      println("\n================================================================================")
+      println("1st optimization for timestamp #$(row), zone: $(zone)\n")
+      perform_estimate(nlp1[zone], v1[zone], T1[zone])
+    end
   end
 
   # perform reference angle passing to get the final angle results
@@ -1047,21 +1058,25 @@ for row = 1:nrows # all timestamps
   perform_data_sharing(nzones, Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
 
   # second optimization after shared node data exchange
-  for zone in Secondestimate_set
-    #println("\n================================================================================")
-    #println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
-    #perform_estimate(nlp2[zone], v2[zone], T2[zone])
-    #(v2[zone], T2[zone]) = perform_estimate_spawn(nlp2[zone], v2[zone], T2[zone])
-    spawnDict[zone] = @spawn perform_estimate_spawn(nlp2[zone], v2[zone], T2[zone])
-  end
+  if parallelOptimizationsFlag
+    for zone in Secondestimate_set
+      spawnedFunctionDict[zone] = @spawn perform_estimate_parallel(nlp2[zone], v2[zone], T2[zone])
+    end
 
-  # fetch call over all zones insures we have full results back as fetch will block
-  # until the spawned function is complete
-  for zone = 0:nzones-1
-    (v2[zone], T2[zone]) = fetch(spawnDict[zone])
-    println("\n2nd optimization for timestamp #$(row), zone: $(zone):")
-    println("    Solution v = $(value.(v2[zone]))")
-    println("    Solution T = $(value.(T2[zone]))")
+    # fetch call over all zones insures we have full results back as fetch will block
+    # until the spawned function is complete
+    for zone = 0:nzones-1
+      (v2[zone], T2[zone]) = fetch(spawnedFunctionDict[zone])
+      println("\n2nd optimization for timestamp #$(row), zone: $(zone):")
+      println("    Solution v = $(value.(v2[zone]))")
+      println("    Solution T = $(value.(T2[zone]))")
+    end
+  else
+    for zone in Secondestimate_set
+      println("\n================================================================================")
+      println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
+      perform_estimate(nlp2[zone], v2[zone], T2[zone])
+    end
   end
 
   # perform reference angle passing to get the final angle results
