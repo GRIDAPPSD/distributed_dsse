@@ -758,7 +758,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
 end
 
 
-function perform_estimate(nlp, v, T)
+function perform_estimate_sequential(nlp, v, T)
   # call solver given everything is setup coming in
   @time optimize!(nlp)
   solution_summary(nlp, verbose=true)
@@ -1006,8 +1006,8 @@ println("number of timestamps to process: $(nrows)")
 spawnedFunctionDict = Dict()
 
 ntimestamps = 0
-for row = 1:1 # first timestamp only
-#for row = 1:nrows # all timestamps
+#for row = 1:1 # first timestamp only
+for row = 1:nrows # all timestamps
   global ntimestamps += 1
 
   for zone = 0:nzones-1
@@ -1041,7 +1041,7 @@ for row = 1:1 # first timestamp only
     for zone = 0:nzones-1
       println("\n================================================================================")
       println("1st optimization for timestamp #$(row), zone: $(zone)\n")
-      perform_estimate(nlp1[zone], v1[zone], T1[zone])
+      perform_estimate_sequential(nlp1[zone], v1[zone], T1[zone])
     end
   end
 
@@ -1084,7 +1084,7 @@ for row = 1:1 # first timestamp only
     for zone in Secondestimate_set
       println("\n================================================================================")
       println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
-      perform_estimate(nlp2[zone], v2[zone], T2[zone])
+      perform_estimate_sequential(nlp2[zone], v2[zone], T2[zone])
     end
   end
 
