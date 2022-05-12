@@ -758,25 +758,13 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
 end
 
 
+# this is only called if parallelOptimizationsFlag is false
 function perform_estimate_sequential(nlp, v, T)
   # call solver given everything is setup coming in
   @time optimize!(nlp)
   solution_summary(nlp, verbose=true)
   println("\nSolution v = $(value.(v))")
   println("\nSolution T = $(value.(T))")
-end
-
-
-function perform_estimate_parallel(nlp, v, T)
-  # call solver given everything is setup coming in
-  # don't do the diagnostic output with this version because it's executed asynchronously
-  # and could get quite confusing
-  # need to return a value so there is something to "fetch" when the
-  # spawned thread finishes
-  # the values that are actually computed from the optimization, v and T, are updated
-  # without returning them
-  # returning the time the optimization took is a clever way to get benchmarking data
-  return @elapsed optimize!(nlp)
 end
 
 
@@ -1026,7 +1014,9 @@ for row = 1:nrows # all timestamps
   # first optimization for each zone
   if parallelOptimizationsFlag
     for zone = 0:nzones-1
-      spawnedFunctionDict[zone] = @spawn perform_estimate_parallel(nlp1[zone], v1[zone], T1[zone])
+      # nothing to do but spawn the optimization different threads returning the
+      # elapsed time to display below
+      spawnedFunctionDict[zone] = @spawn @elapsed optimize!(nlp1[zone])
     end
 
     # fetch call over all zones insures we have full results back as fetch will block
@@ -1069,7 +1059,9 @@ for row = 1:nrows # all timestamps
   # second optimization after shared node data exchange
   if parallelOptimizationsFlag
     for zone in Secondestimate_set
-      spawnedFunctionDict[zone] = @spawn perform_estimate_parallel(nlp2[zone], v2[zone], T2[zone])
+      # nothing to do but spawn the optimization different threads returning the
+      # elapsed time to display below
+      spawnedFunctionDict[zone] = @spawn @elapsed optimize!(nlp2[zone])
     end
 
     # fetch call over all zones insures we have full results back as fetch will block
