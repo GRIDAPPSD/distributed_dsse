@@ -206,81 +206,167 @@ function fake_variance_comparison()
 end
 
 
-function setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Sharedalways_set)
+function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, Pvar, Qvar, Vmagvar)
+
+  shareFlag = false
+
+  if destmeas in measidxs2[destzone]["vi"]
+    shareFlag = Vmagvar[sourcezone] < rmat2[destzone][destmeas]
+    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: vi, destrmat: $(rmat2[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcezone), source Vmagvar: $(Vmagvar[sourcezone]), sharing: $(shareFlag)")
+
+  elseif destmeas in measidxs2[destzone]["Pi"]
+    shareFlag = Pvar[sourcezone] < rmat2[destzone][destmeas]
+    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Pi, destrmat: $(rmat2[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source Pvar: $(Pvar[sourcezone]), sharing: $(shareFlag)")
+
+  elseif destmeas in measidxs2[destzone]["Qi"]
+    shareFlag = Qvar[sourcezone] < rmat2[destzone][destmeas]
+    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Qi, destrmat: $(rmat2[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source Qvar: $(Qvar[sourcezone]), sharing: $(shareFlag)")
+
+  else
+    println("ERROR: measurement type not recognized for zone: $(destzone), measidx: $(destmeas)")
+    goodbye()
+
+  end
+
+  return shareFlag
+end
+
+
+function setup_data_sharing(nzones, measidxs2, rmat2, Ybus, shared_nodenames, shared_nodeidx_measidx2_map, Sharedalways_set)
+
+  Pvar = Dict()
+  Qvar = Dict()
+  Vmagvar = Dict()
+
+  # Calculate variance predictor, SP, for each zone since our WLS optimization does not
+  # directly compute variance
+  # From SP, calculate SPV, then a predicted variance for each measurement type used for
+  # comparison with measurement variance to determine whether to share data
+  for zone = 0:nzones-1
+    SPrealSum = 0.0
+    SPimagSum = 0.0
+    for (noderow, cols) in Ybus[zone]
+      for (nodecol, val) in cols
+        #println("*** zone: $(zone), Ybus noderow: $(noderow), nodecol: $(nodecol), val: $(val)")
+        SPrealSum += abs(real(val))
+        SPimagSum += abs(imag(val))
+      end
+    end
+    SP = complex(SPrealSum, SPimagSum)
+    println("*** zone: $(zone), SP: $(SP)")
+
+    #println("Pi measidxs2:  $(measidxs2[zone]["Pi"])")
+    #println("Qi measidxs2:  $(measidxs2[zone]["Qi"])")
+
+    PvarSum = 0.0
+    for measidx in measidxs2[zone]["Pi"]
+      PvarSum += rmat2[zone][measidx]
+    end
+    println("*** zone: $(zone), PvarSum:  $(PvarSum)")
+
+    QvarSum = 0.0
+    for measidx in measidxs2[zone]["Qi"]
+      QvarSum += rmat2[zone][measidx]
+    end
+    println("*** zone: $(zone), QvarSum:  $(QvarSum)")
+
+    SPV = abs(complex(real(SP)*PvarSum, imag(SP)*QvarSum))
+    println("*** zone: $(zone), SPV: $(SPV)")
+
+    # Fernando hardwired values
+    #if zone==0
+    #  SPV = 294278.0061
+    #elseif zone==1 || zone==3 || zone==5
+    #  SPV = 17690.675
+    #else
+    #  SPV = 64089.68
+    #end
+    #println("*** zone: $(zone), Fernando hardwired SPV: $(SPV)")
+
+    Pvar[zone] = SPV*5.34e-5
+    Qvar[zone] = Pvar[zone]*0.8
+    Vmagvar[zone] = 1.44/SPV
+    println("*** zone: $(zone), Pvar: $(Pvar[zone]), Qvar: $(Qvar[zone]), Vmagvar: $(Vmagvar[zone])")
+  end
+
   #Sharednodes = Dict()
   Sharedmeas = Dict()
   SharedmeasAlt = Dict()
   Secondestimate_set = Set()
 
   for (key, value) in shared_nodenames
-    zone = value[1][1]
-    inode = value[1][2]
-    if !haskey(Sharedmeas, zone)
-      #Sharednodes[zone] = Dict()
-      Sharedmeas[zone] = Dict()
-      SharedmeasAlt[zone] = Dict()
+    destzone = value[1][1]
+    destnode = value[1][2]
+    sourcezone = value[2][1]
+    sourcenode = value[2][2]
+    if !haskey(Sharedmeas, destzone)
+      #Sharednodes[destzone] = Dict()
+      Sharedmeas[destzone] = Dict()
+      SharedmeasAlt[destzone] = Dict()
     end
-    #Sharednodes[zone][inode] = value[2]
+    #Sharednodes[destzone][destnode] = value[2]
 
-    for imeas in shared_nodeidx_measidx2_map[zone][inode]
+    for destmeas in shared_nodeidx_measidx2_map[destzone][destnode]
       # determine whether data sharing should be done
-      if (zone, imeas) in Sharedalways_set
-        println("Always sharing data due to newly added measurement for destzone: $(zone), destmeas: $(imeas), sourcezone: $(value[2][1]), sourcenodeidx: $(value[2][2])")
-      elseif fake_variance_comparison()
-        println("Will be comparing variance, for now falling through to data sharing for destzone: $(zone), destmeas: $(imeas), sourcezone: $(value[2][1]), sourcenodeidx: $(value[2][2])")
+      if (destzone, destmeas) in Sharedalways_set
+        println("Always sharing data due to newly added measurement for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+      #elseif fake_variance_comparison()
+        #println("Will be comparing variance, for now falling through to data sharing for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+      elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, Pvar, Qvar, Vmagvar)
       else
         # skip data sharing because it doesn't meet previous checks
-        println("Skip sharing data for zone: $(zone), meas: $(imeas)")
+        println("Skip sharing data for destzone: $(destzone), destmeas: $(destmeas)")
         continue
       end
 
-      Sharedmeas[zone][imeas] = value[2]
-      if zone == 0
-        SharedmeasAlt[zone][imeas] = value[2]
+      Sharedmeas[destzone][destmeas] = value[2]
+      if destzone == 0
+        SharedmeasAlt[destzone][destmeas] = value[2]
       else
-        SharedmeasAlt[zone][imeas] = value[1]
+        SharedmeasAlt[destzone][destmeas] = value[1]
       end
-      push!(Secondestimate_set, zone)
+      push!(Secondestimate_set, destzone)
     end
 
-    zone = value[2][1]
-    inode = value[2][2]
-    if !haskey(Sharedmeas, zone)
-      #Sharednodes[zone] = Dict()
-      Sharedmeas[zone] = Dict()
-      SharedmeasAlt[zone] = Dict()
+    destzone = value[2][1]
+    destnode = value[2][2]
+    sourcezone = value[1][1]
+    sourcenode = value[1][2]
+    if !haskey(Sharedmeas, destzone)
+      #Sharednodes[destzone] = Dict()
+      Sharedmeas[destzone] = Dict()
+      SharedmeasAlt[destzone] = Dict()
     end
-    #Sharednodes[zone][inode] = value[1]
+    #Sharednodes[destzone][destnode] = value[1]
 
-    for imeas in shared_nodeidx_measidx2_map[zone][inode]
+    for destmeas in shared_nodeidx_measidx2_map[destzone][destnode]
       # determine whether data sharing should be done
-      if (zone, imeas) in Sharedalways_set
-        println("Always reverse sharing data due to newly added measurement for destzone: $(zone), destmeas: $(imeas), sourcezone: $(value[1][1]), sourcenodeidx: $(value[1][2])")
-      elseif fake_variance_comparison()
-        println("Will be comparing variance, for now falling through to reverse data sharing for destzone: $(zone), destmeas: $(imeas), sourcezone: $(value[1][1]), sourcenodeidx: $(value[1][2])")
+      if (destzone, destmeas) in Sharedalways_set
+        println("Always reverse sharing data due to newly added measurement for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+      #elseif fake_variance_comparison()
+        #println("Will be comparing variance, for now falling through to reverse data sharing for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+      elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, Pvar, Qvar, Vmagvar)
       else
         # skip data sharing because it doesn't meet previous checks
-        println("Skip sharing data for zone: $(zone), meas: $(imeas)")
+        println("Skip reverse sharing data for destzone: $(destzone), destmeas: $(destmeas)")
         continue
       end
 
-      Sharedmeas[zone][imeas] = value[1]
-      if zone == 0
-        SharedmeasAlt[zone][imeas] = value[1]
+      Sharedmeas[destzone][destmeas] = value[1]
+      if destzone == 0
+        SharedmeasAlt[destzone][destmeas] = value[1]
       else
-        SharedmeasAlt[zone][imeas] = value[2]
+        SharedmeasAlt[destzone][destmeas] = value[2]
       end
-      push!(Secondestimate_set, zone)
+      push!(Secondestimate_set, destzone)
     end
   end
+
   println("Shared nodenames dictionary: $(shared_nodenames)\n")
   #println("Sharednodes dictionary: $(Sharednodes)\n")
   println("Sharedmeas dictionary: $(Sharedmeas)\n")
   println("SharedmeasAlt dictionary: $(SharedmeasAlt)\n")
   println("Secondestimate_set: $(Secondestimate_set)\n")
-
-  # Calculate variance predictor, SP, for each zone since our WLS optimization does not
-  # find variance
 
   return Sharedmeas, SharedmeasAlt, Secondestimate_set
 end
@@ -919,7 +1005,7 @@ for zone = 0:nzones-1
   measidxs1[zone], measidxs2[zone], measidx1_nodeidx_map[zone], measidx2_nodeidx_map[zone], rmat1[zone], rmat2[zone], Ybus[zone], Ybusp[zone], Vnom[zone], nodenames[zone], nodename_nodeidx_map[zone], shared_nodeidx_measidx2_map[zone], measdata[zone] = get_input(zone, shared_nodenames, Sharedalways_set)
 end
 
-Sharedmeas, SharedmeasAlt, Secondestimate_set = setup_data_sharing(shared_nodenames, shared_nodeidx_measidx2_map, Sharedalways_set)
+Sharedmeas, SharedmeasAlt, Secondestimate_set = setup_data_sharing(nzones, measidxs2, rmat2, Ybus, shared_nodenames, shared_nodeidx_measidx2_map, Sharedalways_set)
 
 # do the data structure initialization for reference angle passing
 phase_set = Set()
