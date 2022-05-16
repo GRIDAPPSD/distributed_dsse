@@ -207,6 +207,13 @@ function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenod
   #println("Normally would be comparing variance, but currently always sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
   #return true
 
+  # uncomment these to always share data when the destination is zone 0, never otherwise
+  #if destzone == 0
+  #  return true
+  #else
+  #  return false
+  #end
+
   shareFlag = false
 
   if destmeas in measidxs2[destzone]["vi"]
