@@ -201,12 +201,11 @@ function get_input(zone, shared_nodenames, Sharedalways_set)
 end
 
 
-function fake_variance_comparison()
-  return true
-end
-
-
 function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, Pvar, Qvar, Vmagvar)
+
+  # uncomment these to always do data sharing
+  #println("Normally would be comparing variance, but currently always sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+  #return true
 
   shareFlag = false
 
@@ -310,8 +309,6 @@ function setup_data_sharing(nzones, measidxs2, rmat2, Ybus, shared_nodenames, sh
       # determine whether data sharing should be done
       if (destzone, destmeas) in Sharedalways_set
         println("Always sharing data due to newly added measurement for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
-      #elseif fake_variance_comparison()
-        #println("Will be comparing variance, for now falling through to data sharing for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
       elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, Pvar, Qvar, Vmagvar)
       else
         # skip data sharing because it doesn't meet previous checks
@@ -343,8 +340,6 @@ function setup_data_sharing(nzones, measidxs2, rmat2, Ybus, shared_nodenames, sh
       # determine whether data sharing should be done
       if (destzone, destmeas) in Sharedalways_set
         println("Always reverse sharing data due to newly added measurement for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
-      #elseif fake_variance_comparison()
-        #println("Will be comparing variance, for now falling through to reverse data sharing for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
       elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, Pvar, Qvar, Vmagvar)
       else
         # skip data sharing because it doesn't meet previous checks
