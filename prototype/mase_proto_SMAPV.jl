@@ -929,7 +929,7 @@ function compute_stats(prefix, nzones, nodenames, StatsMagnitude, StatsAngle)
   mag_max_mean_zone = ""
   mag_max_mean_node = ""
   for zone = 0:nzones-1
-    println("\n$(prefix) optimization magnitude min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
+    println("\n$(prefix) opt magnitude min, max, mean diff stats for zone: $(zone), # of timestamps: $(ntimestamps):")
     for inode = 1:length(nodenames[zone])
       mean = StatsMagnitude[zone][inode]["sum"]/ntimestamps
       println("""  $(nodenames[zone][inode]): $(StatsMagnitude[zone][inode]["min"]), $(StatsMagnitude[zone][inode]["max"]), $(mean)""")
@@ -953,7 +953,7 @@ function compute_stats(prefix, nzones, nodenames, StatsMagnitude, StatsAngle)
   angle_max_mean_zone = ""
   angle_max_mean_node = ""
   for zone = 0:nzones-1
-    println("\n$(prefix) optimization angle min, max, mean difference stats for zone: $(zone), # of timestamps: $(ntimestamps):")
+    println("\n$(prefix) opt angle min, max, mean diff stats for zone: $(zone), # of timestamps: $(ntimestamps):")
     for inode = 1:length(nodenames[zone])
       mean = StatsAngle[zone][inode]["sum"]/ntimestamps
       println("""  $(nodenames[zone][inode]): $(StatsAngle[zone][inode]["min"]), $(StatsAngle[zone][inode]["max"]), $(mean)""")
@@ -974,10 +974,10 @@ function compute_stats(prefix, nzones, nodenames, StatsMagnitude, StatsAngle)
   angle_max_max = rad2deg(angle_max_max)
   angle_max_mean = rad2deg(angle_max_mean)
 
-  println("\n$(prefix) optimization magnitude max difference zone: $(mag_max_max_zone), node: $(mag_max_max_node), value: $(mag_max_max)")
-  println("$(prefix) optimization magnitude max mean difference zone: $(mag_max_mean_zone), node: $(mag_max_mean_node), value: $(mag_max_mean)")
-  println("$(prefix) optimization angle max difference zone: $(angle_max_max_zone), node: $(angle_max_max_node), value: $(angle_max_max)")
-  println("$(prefix) optimization angle max mean difference zone: $(angle_max_mean_zone), node: $(angle_max_mean_node), value: $(angle_max_mean)")
+  println("\n$(prefix) opt magnitude max diff zone: $(mag_max_max_zone), node: $(mag_max_max_node), value: $(mag_max_max)")
+  println("$(prefix) opt magnitude max mean diff zone: $(mag_max_mean_zone), node: $(mag_max_mean_node), value: $(mag_max_mean)")
+  println("$(prefix) opt angle max diff zone: $(angle_max_max_zone), node: $(angle_max_max_node), value: $(angle_max_max)")
+  println("$(prefix) opt angle max mean diff zone: $(angle_max_mean_zone), node: $(angle_max_mean_node), value: $(angle_max_mean)")
 end
 
 
