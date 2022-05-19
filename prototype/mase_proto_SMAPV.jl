@@ -205,7 +205,7 @@ function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenod
 
   # uncomment these to always do data sharing
   #println("Normally would be comparing variance, but currently always sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
-  #return true
+  return true
 
   # uncomment these to always share data when the destination is zone 0, never otherwise
   #if destzone == 0
@@ -757,6 +757,7 @@ function setup_estimate(measidxs, measidx_nodeidx_map, rmat, Ybus, Vnom)
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer)) # tol default to 1e-8 and acceptable_tol defaults to 1e-6
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-10,"acceptable_tol"=>1e-10))
   #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-12,"acceptable_tol"=>1e-12,"max_iter"=>2000)) # not recommended, lots of iterating with no better results
+  #nlp = Model(optimizer_with_attributes(Ipopt.Optimizer,"tol"=>1e-16,"acceptable_tol"=>1e-16,"max_iter"=>10000,"print_level"=>2)) # only good for parallelization benchmarking
 
   nnode = length(Vnom) # get number of nodes from # of Vnom elements
   nmeas = length(rmat) # get number of measurements from # of rmat elements
@@ -849,7 +850,7 @@ end
 # this is only called if parallelOptimizationsFlag is false
 function perform_estimate_sequential(nlp, v, T)
   # call solver given everything is setup coming in
-  @time optimize!(nlp)
+  optimize!(nlp)
   solution_summary(nlp, verbose=true)
   println("\nSolution v = $(value.(v))")
   println("\nSolution T = $(value.(T))")
@@ -989,6 +990,9 @@ println("Start parsing input files...")
 # nodelist.csv files
 # assume they are indexed 0 through nzones-1
 nzones = length(filter(x->startswith(x, "nodelist.csv."), cd(readdir, test_dir)))
+# hardwire number of zones for benchmarking, also need to update the
+# sharednodes.csv file to make sure it only references nodes in those zones
+#nzones = 3
 
 shared_nodenames = Dict()
 for row in CSV.File(test_dir*"/sharednodes.csv", header=false, ntasks=1)
@@ -1106,27 +1110,29 @@ for row = 1:nrows # all timestamps
     #println("*** Timestamp with measurements: $(measurement)\n")
   end
 
-  # first optimization for each zone
-  if parallelOptimizationsFlag
-    for zone = 0:nzones-1
-      # nothing to do but spawn the optimization different threads returning the
-      # elapsed time to display below
-      spawnedFunctionDict[zone] = @spawn @elapsed optimize!(nlp1[zone])
-    end
+  @time begin # benchmark optimizations over all zones
+    # first optimization for each zone
+    if parallelOptimizationsFlag
+      for zone = 0:nzones-1
+        # nothing to do but spawn the optimization different threads returning
+        # the elapsed time to display below
+        spawnedFunctionDict[zone] = @spawn @elapsed optimize!(nlp1[zone])
+      end
 
-    # fetch call over all zones insures we have full results back as fetch will block
-    # until the spawned function is complete
-    for zone = 0:nzones-1
-      optime = fetch(spawnedFunctionDict[zone])
-      println("\n1st optimization for timestamp #$(row), zone: $(zone), time: $(optime)")
-      println("    Solution v = $(value.(v1[zone]))")
-      println("    Solution T = $(value.(T1[zone]))")
-    end
-  else
-    for zone = 0:nzones-1
-      println("\n================================================================================")
-      println("1st optimization for timestamp #$(row), zone: $(zone)\n")
-      perform_estimate_sequential(nlp1[zone], v1[zone], T1[zone])
+      # fetch call over all zones insures we have full results back as fetch
+      # will block until the spawned function is complete
+      for zone = 0:nzones-1
+        optime = fetch(spawnedFunctionDict[zone])
+        println("\n1st optimization for timestamp #$(row), zone: $(zone), time: $(optime)")
+        println("    Solution v = $(value.(v1[zone]))")
+        println("    Solution T = $(value.(T1[zone]))")
+      end
+    else
+      for zone = 0:nzones-1
+        println("\n================================================================================")
+        println("1st optimization for timestamp #$(row), zone: $(zone)\n")
+        perform_estimate_sequential(nlp1[zone], v1[zone], T1[zone])
+      end
     end
   end
 
@@ -1152,26 +1158,28 @@ for row = 1:nrows # all timestamps
   perform_data_sharing(nzones, Ybusp, Sharedmeas, SharedmeasAlt, measidxs2, v1, T1, zvec2)
 
   # second optimization after shared node data exchange
-  if parallelOptimizationsFlag
-    for zone in Secondestimate_set
-      # nothing to do but spawn the optimization different threads returning the
-      # elapsed time to display below
-      spawnedFunctionDict[zone] = @spawn @elapsed optimize!(nlp2[zone])
-    end
+  @time begin # benchmark optimizations over all zones
+    if parallelOptimizationsFlag
+      for zone in Secondestimate_set
+        # nothing to do but spawn the optimization different threads returning
+        # the elapsed time to display below
+        spawnedFunctionDict[zone] = @spawn @elapsed optimize!(nlp2[zone])
+      end
 
-    # fetch call over all zones insures we have full results back as fetch will block
-    # until the spawned function is complete
-    for zone = 0:nzones-1
-      optime = fetch(spawnedFunctionDict[zone])
-      println("\n2nd optimization for timestamp #$(row), zone: $(zone), time: $(optime)")
-      println("    Solution v = $(value.(v2[zone]))")
-      println("    Solution T = $(value.(T2[zone]))")
-    end
-  else
-    for zone in Secondestimate_set
-      println("\n================================================================================")
-      println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
-      perform_estimate_sequential(nlp2[zone], v2[zone], T2[zone])
+      # fetch call over all zones insures we have full results back as fetch
+      # will block until the spawned function is complete
+      for zone = 0:nzones-1
+        optime = fetch(spawnedFunctionDict[zone])
+        println("\n2nd optimization for timestamp #$(row), zone: $(zone), time: $(optime)")
+        println("    Solution v = $(value.(v2[zone]))")
+        println("    Solution T = $(value.(T2[zone]))")
+      end
+    else
+      for zone in Secondestimate_set
+        println("\n================================================================================")
+        println("2nd optimization for timestamp #$(row), zone: $(zone)\n")
+        perform_estimate_sequential(nlp2[zone], v2[zone], T2[zone])
+      end
     end
   end
 
