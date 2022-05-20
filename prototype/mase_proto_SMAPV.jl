@@ -201,11 +201,11 @@ function get_input(zone, shared_nodenames, Sharedalways_set)
 end
 
 
-function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, Pvar, Qvar, Vmagvar)
+function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, ViPredVar, PiPredVar, QiPredVar)
 
   # uncomment these to always do data sharing
   #println("Normally would be comparing variance, but currently always sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
-  return true
+  #return true
 
   # uncomment these to always share data when the destination is zone 0, never otherwise
   #if destzone == 0
@@ -217,16 +217,16 @@ function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenod
   shareFlag = false
 
   if destmeas in measidxs2[destzone]["vi"]
-    shareFlag = Vmagvar[sourcezone] < rmat2[destzone][destmeas]
-    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: vi, destrmat: $(rmat2[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcezone), source Vmagvar: $(Vmagvar[sourcezone]), sharing: $(shareFlag)")
+    shareFlag = ViPredVar[sourcezone] < rmat2[destzone][destmeas]
+    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: vi, destrmat: $(rmat2[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcezone), source ViPredVar: $(ViPredVar[sourcezone]), sharing: $(shareFlag)")
 
   elseif destmeas in measidxs2[destzone]["Pi"]
-    shareFlag = Pvar[sourcezone] < rmat2[destzone][destmeas]
-    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Pi, destrmat: $(rmat2[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source Pvar: $(Pvar[sourcezone]), sharing: $(shareFlag)")
+    shareFlag = PiPredVar[sourcezone] < rmat2[destzone][destmeas]
+    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Pi, destrmat: $(rmat2[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source PiPredVar: $(PiPredVar[sourcezone]), sharing: $(shareFlag)")
 
   elseif destmeas in measidxs2[destzone]["Qi"]
-    shareFlag = Qvar[sourcezone] < rmat2[destzone][destmeas]
-    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Qi, destrmat: $(rmat2[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source Qvar: $(Qvar[sourcezone]), sharing: $(shareFlag)")
+    shareFlag = QiPredVar[sourcezone] < rmat2[destzone][destmeas]
+    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Qi, destrmat: $(rmat2[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source QiPredVar: $(QiPredVar[sourcezone]), sharing: $(shareFlag)")
 
   else
     println("ERROR: measurement type not recognized for zone: $(destzone), measidx: $(destmeas)")
@@ -240,9 +240,9 @@ end
 
 function setup_data_sharing(nzones, measidxs2, rmat2, Ybus, shared_nodenames, shared_nodeidx_measidx2_map, Sharedalways_set)
 
-  Pvar = Dict()
-  Qvar = Dict()
-  Vmagvar = Dict()
+  ViPredVar = Dict()
+  PiPredVar = Dict()
+  QiPredVar = Dict()
 
   # Calculate variance predictor, SP, for each zone since our WLS optimization does not
   # directly compute variance
@@ -264,35 +264,33 @@ function setup_data_sharing(nzones, measidxs2, rmat2, Ybus, shared_nodenames, sh
     #println("Pi measidxs2:  $(measidxs2[zone]["Pi"])")
     #println("Qi measidxs2:  $(measidxs2[zone]["Qi"])")
 
-    PvarSum = 0.0
+    Pvar = 0.0
     for measidx in measidxs2[zone]["Pi"]
-      PvarSum += rmat2[zone][measidx]
+      Pvar += rmat2[zone][measidx]
     end
-    println("*** zone: $(zone), PvarSum:  $(PvarSum)")
+    println("*** zone: $(zone), Pvar:  $(Pvar)")
 
-    QvarSum = 0.0
+    Qvar = 0.0
     for measidx in measidxs2[zone]["Qi"]
-      QvarSum += rmat2[zone][measidx]
+      Qvar += rmat2[zone][measidx]
     end
-    println("*** zone: $(zone), QvarSum:  $(QvarSum)")
+    println("*** zone: $(zone), Qvar:  $(Qvar)")
 
-    SPV = abs(complex(real(SP)*PvarSum, imag(SP)*QvarSum))
-    println("*** zone: $(zone), SPV: $(SPV)")
+    # define x1 through x6 predictors
+    x1 = real(SP)
+    x2 = imag(SP)
+    x3 = Pvar
+    x4 = Qvar
+    x5 = abs(complex(Pvar, Qvar))
+    x6 = x5^2
 
-    # Fernando hardwired values
-    #if zone==0
-    #  SPV = 294278.0061
-    #elseif zone==1 || zone==3 || zone==5
-    #  SPV = 17690.675
-    #else
-    #  SPV = 64089.68
-    #end
-    #println("*** zone: $(zone), Fernando hardwired SPV: $(SPV)")
+    # coefficients for this linear equation to predict variance
+    # come from Fernando
+    ViPredVar[zone] = 9.55309220738361e-10 + 4.15403011180334e-14*x1 + -4.56840650943197e-14*x2 + -0.0202806579933327*x3 + -0.0037278167312874*x4 + 0.0205797324479745*x5 + 8.21185781055266e-13*x6
+    PiPredVar[zone] = -6.91061422675693e-5 + 4.12020419044728e-9*x1 + 9.29041100657934e-10*x2 + -59.2583978614416*x3 + -10.0766424124349*x4 + 61.3827266934199*x5 + 4.64588896163716e-7*x6
+    QiPredVar[zone] = 1.56570597285086e-5 + 1.00705289058381e-8*x1 + -1.25951701293274e-9*x2 + 243.175744256872*x3 + 50.3647628507064*x4 + -246.932356049828*x5 + 9.15405702843027e-7*x6
 
-    Pvar[zone] = SPV*5.34e-5
-    Qvar[zone] = Pvar[zone]*0.8
-    Vmagvar[zone] = 1.44/SPV
-    println("*** zone: $(zone), Pvar: $(Pvar[zone]), Qvar: $(Qvar[zone]), Vmagvar: $(Vmagvar[zone])")
+    println("*** zone: $(zone), ViPredVar: $(ViPredVar[zone]), PiPredVar: $(PiPredVar[zone]), QiPredVar: $(QiPredVar[zone])")
   end
 
   #Sharednodes = Dict()
@@ -316,7 +314,7 @@ function setup_data_sharing(nzones, measidxs2, rmat2, Ybus, shared_nodenames, sh
       # determine whether data sharing should be done
       if (destzone, destmeas) in Sharedalways_set
         println("Always sharing data due to newly added measurement for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
-      elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, Pvar, Qvar, Vmagvar)
+      elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, ViPredVar, PiPredVar, QiPredVar)
       else
         # skip data sharing because it doesn't meet previous checks
         println("Skip sharing data for destzone: $(destzone), destmeas: $(destmeas)")
@@ -347,7 +345,7 @@ function setup_data_sharing(nzones, measidxs2, rmat2, Ybus, shared_nodenames, sh
       # determine whether data sharing should be done
       if (destzone, destmeas) in Sharedalways_set
         println("Always reverse sharing data due to newly added measurement for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
-      elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, Pvar, Qvar, Vmagvar)
+      elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs2, rmat2, ViPredVar, PiPredVar, QiPredVar)
       else
         # skip data sharing because it doesn't meet previous checks
         println("Skip reverse sharing data for destzone: $(destzone), destmeas: $(destmeas)")
