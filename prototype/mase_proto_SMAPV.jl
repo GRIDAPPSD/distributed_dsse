@@ -207,12 +207,16 @@ function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenod
   #println("Normally would be comparing variance, but currently always sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
   #return true
 
-  # uncomment these to always share data when the destination is zone 0, never otherwise
-  #if destzone == 0
-  #  return true
-  #else
-  #  return false
-  #end
+  # uncomment these to always share data when the destination is zone 0 and
+  # never otherwise, or vice versa depending upon which return statements
+  # are uncommented
+  if destzone == 0
+    return true
+    #return false
+  else
+    return false
+    #return true
+  end
 
   shareFlag = false
 
