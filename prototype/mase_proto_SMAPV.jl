@@ -210,13 +210,13 @@ function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenod
   # uncomment these to always share data when the destination is zone 0 and
   # never otherwise, or vice versa depending upon which return statements
   # are uncommented
-  if destzone == 0
-    return true
-    #return false
-  else
-    return false
-    #return true
-  end
+  #if destzone == 0
+  #  return true
+  #  #return false
+  #else
+  #  return false
+  #  #return true
+  #end
 
   shareFlag = false
 
@@ -926,18 +926,21 @@ function compare_estimate_angles(T, nodenames, FPIResults, zone, Vnom, StatsAngl
 end
 
 
-function compute_stats(prefix, nzones, nodenames, StatsMagnitude, StatsAngle)
+function compute_stats(prefix, nzones, ntimestamps, nodenames, StatsMagnitude, StatsAngle)
   mag_max_max = 0.0
   mag_max_max_zone = ""
   mag_max_max_node = ""
   mag_max_mean = 0.0
   mag_max_mean_zone = ""
   mag_max_mean_node = ""
+  mag_sum = 0.0
+  mean_count = 0
   for zone = 0:nzones-1
     println("\n$(prefix) opt magnitude min, max, mean diff stats for zone: $(zone), # of timestamps: $(ntimestamps):")
     for inode = 1:length(nodenames[zone])
       mean = StatsMagnitude[zone][inode]["sum"]/ntimestamps
       println("""  $(nodenames[zone][inode]): $(StatsMagnitude[zone][inode]["min"]), $(StatsMagnitude[zone][inode]["max"]), $(mean)""")
+      mag_sum += mean
       if StatsMagnitude[zone][inode]["max"] > mag_max_max
         mag_max_max = StatsMagnitude[zone][inode]["max"]
         mag_max_max_zone = zone
@@ -949,7 +952,9 @@ function compute_stats(prefix, nzones, nodenames, StatsMagnitude, StatsAngle)
         mag_max_mean_node = nodenames[zone][inode]
       end
     end
+    mean_count += length(nodenames[zone])
   end
+  mag_mean = mag_sum/mean_count
 
   angle_max_max = 0.0
   angle_max_max_zone = ""
@@ -957,11 +962,13 @@ function compute_stats(prefix, nzones, nodenames, StatsMagnitude, StatsAngle)
   angle_max_mean = 0.0
   angle_max_mean_zone = ""
   angle_max_mean_node = ""
+  angle_sum = 0.0
   for zone = 0:nzones-1
     println("\n$(prefix) opt angle min, max, mean diff stats for zone: $(zone), # of timestamps: $(ntimestamps):")
     for inode = 1:length(nodenames[zone])
       mean = StatsAngle[zone][inode]["sum"]/ntimestamps
       println("""  $(nodenames[zone][inode]): $(StatsAngle[zone][inode]["min"]), $(StatsAngle[zone][inode]["max"]), $(mean)""")
+      angle_sum += mean
       if StatsAngle[zone][inode]["max"] > angle_max_max
         angle_max_max = StatsAngle[zone][inode]["max"]
         angle_max_max_zone = zone
@@ -974,6 +981,7 @@ function compute_stats(prefix, nzones, nodenames, StatsMagnitude, StatsAngle)
       end
     end
   end
+  angle_mean = angle_sum/mean_count
 
   # convert to degrees because it's easier when dealing with small values
   angle_max_max = rad2deg(angle_max_max)
@@ -981,8 +989,10 @@ function compute_stats(prefix, nzones, nodenames, StatsMagnitude, StatsAngle)
 
   println("\n$(prefix) opt magnitude max diff zone: $(mag_max_max_zone), node: $(mag_max_max_node), value: $(mag_max_max)")
   println("$(prefix) opt magnitude max mean diff zone: $(mag_max_mean_zone), node: $(mag_max_mean_node), value: $(mag_max_mean)")
+  println("$(prefix) opt magnitude mean diff: $(mag_mean)")
   println("$(prefix) opt angle max diff zone: $(angle_max_max_zone), node: $(angle_max_max_node), value: $(angle_max_max)")
   println("$(prefix) opt angle max mean diff zone: $(angle_max_mean_zone), node: $(angle_max_mean_node), value: $(angle_max_mean)")
+  println("$(prefix) opt angle mean diff: $(angle_mean)")
 end
 
 
@@ -1092,6 +1102,7 @@ println("\nDone defining optimization problem, start solving it...")
 
 # assume all measurement_data files contain the same number of rows/timestamps
 nrows = length(measdata[0])
+nrows = length(measdata[0]) - 1 # hardwired to match results data
 println("number of timestamps to process: $(nrows)")
 
 spawnedFunctionDict = Dict()
@@ -1207,7 +1218,7 @@ for row = 1:nrows # all timestamps
   end
 end
 
-compute_stats("2nd", nzones, nodenames, StatsMagnitude2, StatsAngle2)
+compute_stats("2nd", nzones, ntimestamps, nodenames, StatsMagnitude2, StatsAngle2)
 # uncomment this and comment out the previous line with no 2nd optimizations
-#compute_stats("1st", nzones, nodenames, StatsMagnitude1, StatsAngle1)
+#compute_stats("1st", nzones, ntimestamps, nodenames, StatsMagnitude1, StatsAngle1)
 
