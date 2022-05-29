@@ -276,7 +276,7 @@ function setup_data_sharing(nzones, measidxs1, rmat1, nomval1, Ybus, shared_node
         Pvar += rmat1[zone][measidx]
       end
     end
-    println("*** zone: $(zone), Pvar:  $(Pvar)")
+    println("*** zone: $(zone), Pvar: $(Pvar)")
 
     Qvar = 0.0
     for measidx in measidxs1[zone]["Qi"]
@@ -284,7 +284,7 @@ function setup_data_sharing(nzones, measidxs1, rmat1, nomval1, Ybus, shared_node
         Qvar += rmat1[zone][measidx]
       end
     end
-    println("*** zone: $(zone), Qvar:  $(Qvar)")
+    println("*** zone: $(zone), Qvar: $(Qvar)")
 
     # define x1 through x6 predictors
     x1 = real(SP)
@@ -332,7 +332,6 @@ function setup_data_sharing(nzones, measidxs1, rmat1, nomval1, Ybus, shared_node
       elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs1, rmat1, ViPredVar, PiPredVar, QiPredVar)
       else
         # skip data sharing because it doesn't meet previous checks
-        println("Skip sharing data for destzone: $(destzone), destmeas: $(destmeas)")
         continue
       end
 
@@ -363,7 +362,6 @@ function setup_data_sharing(nzones, measidxs1, rmat1, nomval1, Ybus, shared_node
       elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs1, rmat1, ViPredVar, PiPredVar, QiPredVar)
       else
         # skip data sharing because it doesn't meet previous checks
-        println("Skip reverse sharing data for destzone: $(destzone), destmeas: $(destmeas)")
         continue
       end
 
