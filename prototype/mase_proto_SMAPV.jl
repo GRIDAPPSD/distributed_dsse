@@ -222,24 +222,36 @@ function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenod
 
   shareFlag = false
 
+  # uncomment these to always share one direction, but not the other based
+  # on the smaller variance predictor value for the measurement type
+  #if destmeas in measidxs1[destzone]["vi"]
+  #  shareFlag = ViPredVar[sourcezone] < ViPredVar[destzone]
+  #  println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: vi, dest ViPredVar: $(ViPredVar[destzone]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source ViPredVar: $(ViPredVar[sourcezone]), sharing: $(shareFlag)")
+  #elseif destmeas in measidxs1[destzone]["Pi"]
+  #  shareFlag = PiPredVar[sourcezone] < PiPredVar[destzone]
+  #  println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Pi, dest PiPredVar: $(PiPredVar[destzone]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source PiPredVar: $(PiPredVar[sourcezone]), sharing: $(shareFlag)")
+  #elseif destmeas in measidxs1[destzone]["Qi"]
+  #  shareFlag = QiPredVar[sourcezone] < QiPredVar[destzone]
+  #  println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Qi, dest QiPredVar: $(QiPredVar[destzone]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source QiPredVar: $(QiPredVar[sourcezone]), sharing: $(shareFlag)")
+  #else
+  #  println("ERROR: measurement type not recognized for zone: $(destzone), measidx: $(destmeas)")
+  #  goodbye()
+  #end
+  #return shareFlag
+
   if destmeas in measidxs1[destzone]["vi"]
     shareFlag = ViPredVar[sourcezone] < rmat1[destzone][destmeas]
-    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: vi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcezone), source ViPredVar: $(ViPredVar[sourcezone]), sharing: $(shareFlag)")
-
+    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: vi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source ViPredVar: $(ViPredVar[sourcezone]), sharing: $(shareFlag)")
   elseif destmeas in measidxs1[destzone]["Pi"]
     shareFlag = PiPredVar[sourcezone] < rmat1[destzone][destmeas]
     println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Pi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source PiPredVar: $(PiPredVar[sourcezone]), sharing: $(shareFlag)")
-
   elseif destmeas in measidxs1[destzone]["Qi"]
     shareFlag = QiPredVar[sourcezone] < rmat1[destzone][destmeas]
     println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Qi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source QiPredVar: $(QiPredVar[sourcezone]), sharing: $(shareFlag)")
-
   else
     println("ERROR: measurement type not recognized for zone: $(destzone), measidx: $(destmeas)")
     goodbye()
-
   end
-
   return shareFlag
 end
 
