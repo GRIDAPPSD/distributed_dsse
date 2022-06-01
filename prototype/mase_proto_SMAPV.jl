@@ -203,55 +203,74 @@ function get_input(zone, shared_nodenames, Sharedalways_set)
 end
 
 
-function predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs1, rmat1, ViPredVar, PiPredVar, QiPredVar)
+function share_always(destzone, destmeas, sourcezone, sourcenode)
+  println("Always sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+  return true
+end
 
-  # uncomment these to always do data sharing
-  #println("Normally would be comparing variance, but currently always sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
-  #return true
 
-  # uncomment these to always share data when the destination is zone 0 and
-  # never otherwise, or vice versa depending upon which return statements
-  # are uncommented
-  #if destzone == 0
-  #  return true
-  #  #return false
-  #else
-  #  return false
-  #  #return true
-  #end
+function share_destzero(destzone, destmeas, sourcezone, sourcenode)
+  if destzone == 0
+    println("Destination zone 0 sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+    return true
+  else
+    println("Destination zone 0 NOT sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+    return false
+  end
+end
 
+
+function share_sourcezero(destzone, destmeas, sourcezone, sourcenode)
+  if sourcezone == 0
+    println("Source zone 0 sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+    return true
+  else
+    println("Source zone 0 NOT sharing data for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
+    return false
+  end
+end
+
+
+function share_oneway_predicted_variance(destzone, destmeas, sourcezone, sourcenode, ViPredVar, PiPredVar, QiPredVar, measidxs1)
   shareFlag = false
 
-  # uncomment these to always share one direction, but not the other based
-  # on the smaller variance predictor value for the measurement type
-  #if destmeas in measidxs1[destzone]["vi"]
-  #  shareFlag = ViPredVar[sourcezone] < ViPredVar[destzone]
-  #  println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: vi, dest ViPredVar: $(ViPredVar[destzone]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source ViPredVar: $(ViPredVar[sourcezone]), sharing: $(shareFlag)")
-  #elseif destmeas in measidxs1[destzone]["Pi"]
-  #  shareFlag = PiPredVar[sourcezone] < PiPredVar[destzone]
-  #  println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Pi, dest PiPredVar: $(PiPredVar[destzone]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source PiPredVar: $(PiPredVar[sourcezone]), sharing: $(shareFlag)")
-  #elseif destmeas in measidxs1[destzone]["Qi"]
-  #  shareFlag = QiPredVar[sourcezone] < QiPredVar[destzone]
-  #  println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Qi, dest QiPredVar: $(QiPredVar[destzone]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source QiPredVar: $(QiPredVar[sourcezone]), sharing: $(shareFlag)")
-  #else
-  #  println("ERROR: measurement type not recognized for zone: $(destzone), measidx: $(destmeas)")
-  #  goodbye()
-  #end
-  #return shareFlag
-
+  # always share one direction, but not the other based on the smaller
+  # variance predictor value for the measurement type
   if destmeas in measidxs1[destzone]["vi"]
-    shareFlag = ViPredVar[sourcezone] < rmat1[destzone][destmeas]
-    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: vi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source ViPredVar: $(ViPredVar[sourcezone]), sharing: $(shareFlag)")
+    shareFlag = ViPredVar[sourcezone] < ViPredVar[destzone]
+    println("Share oneway predicted variance destzone: $(destzone), destmeas: $(destmeas), desttype: vi, dest ViPredVar: $(ViPredVar[destzone]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source ViPredVar: $(ViPredVar[sourcezone]), sharing: $(shareFlag)")
   elseif destmeas in measidxs1[destzone]["Pi"]
-    shareFlag = PiPredVar[sourcezone] < rmat1[destzone][destmeas]
-    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Pi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source PiPredVar: $(PiPredVar[sourcezone]), sharing: $(shareFlag)")
+    shareFlag = PiPredVar[sourcezone] < PiPredVar[destzone]
+    println("Share oneway predicted variance destzone: $(destzone), destmeas: $(destmeas), desttype: Pi, dest PiPredVar: $(PiPredVar[destzone]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source PiPredVar: $(PiPredVar[sourcezone]), sharing: $(shareFlag)")
   elseif destmeas in measidxs1[destzone]["Qi"]
-    shareFlag = QiPredVar[sourcezone] < rmat1[destzone][destmeas]
-    println("Predicted variance comparison destzone: $(destzone), destmeas: $(destmeas), desttype: Qi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source QiPredVar: $(QiPredVar[sourcezone]), sharing: $(shareFlag)")
+    shareFlag = QiPredVar[sourcezone] < QiPredVar[destzone]
+    println("Share oneway predicted variance destzone: $(destzone), destmeas: $(destmeas), desttype: Qi, dest QiPredVar: $(QiPredVar[destzone]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source QiPredVar: $(QiPredVar[sourcezone]), sharing: $(shareFlag)")
   else
     println("ERROR: measurement type not recognized for zone: $(destzone), measidx: $(destmeas)")
     goodbye()
   end
+
+  return shareFlag
+end
+
+
+function share_rmat_predicted_variance(destzone, destmeas, sourcezone, sourcenode, ViPredVar, PiPredVar, QiPredVar, measidxs1, rmat1)
+  shareFlag = false
+
+  if destmeas in measidxs1[destzone]["vi"]
+    shareFlag = ViPredVar[sourcezone] < rmat1[destzone][destmeas]
+    println("Share predicted variance destzone: $(destzone), destmeas: $(destmeas), desttype: vi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source ViPredVar: $(ViPredVar[sourcezone]), sharing: $(shareFlag)")
+  elseif destmeas in measidxs1[destzone]["Pi"]
+    shareFlag = PiPredVar[sourcezone] < rmat1[destzone][destmeas]
+    println("Share predicted variance destzone: $(destzone), destmeas: $(destmeas), desttype: Pi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source PiPredVar: $(PiPredVar[sourcezone]), sharing: $(shareFlag)")
+  elseif destmeas in measidxs1[destzone]["Qi"]
+    shareFlag = QiPredVar[sourcezone] < rmat1[destzone][destmeas]
+    println("Share predicted variance destzone: $(destzone), destmeas: $(destmeas), desttype: Qi, destrmat: $(rmat1[destzone][destmeas]), sourcezone: $(sourcezone), sourcenode: $(sourcenode), source QiPredVar: $(QiPredVar[sourcezone]), sharing: $(shareFlag)")
+  else
+    println("ERROR: measurement type not recognized for zone: $(destzone), measidx: $(destmeas)")
+    goodbye()
+  end
+
   return shareFlag
 end
 
@@ -338,7 +357,15 @@ function setup_data_sharing(nzones, measidxs1, rmat1, nomval1, Ybus, shared_node
       # determine whether data sharing should be done
       if (destzone, destmeas) in Sharedalways_set
         println("Always sharing data due to newly added measurement for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
-      elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs1, rmat1, ViPredVar, PiPredVar, QiPredVar)
+      # these are the possible data sharing strategies for existing measurements
+      # only one of the following elseif lines should be uncommented at a time,
+      # or none if only new measurements should be shared
+      # the uncommented one MUST be the same as the one uncommented below!
+      elseif share_rmat_predicted_variance(destzone, destmeas, sourcezone, sourcenode, ViPredVar, PiPredVar, QiPredVar, measidxs1, rmat1)
+      #elseif share_oneway_predicted_variance(destzone, destmeas, sourcezone, sourcenode, ViPredVar, PiPredVar, QiPredVar, measidxs1)
+      #elseif share_always(destzone, destmeas, sourcezone, sourcenode)
+      #elseif share_destzero(destzone, destmeas, sourcezone, sourcenode)
+      #elseif share_sourcezero(destzone, destmeas, sourcezone, sourcenode)
       else
         # skip data sharing because it doesn't meet previous checks
         continue
@@ -368,7 +395,15 @@ function setup_data_sharing(nzones, measidxs1, rmat1, nomval1, Ybus, shared_node
       # determine whether data sharing should be done
       if (destzone, destmeas) in Sharedalways_set
         println("Always reverse sharing data due to newly added measurement for destzone: $(destzone), destmeas: $(destmeas), sourcezone: $(sourcezone), sourcenode: $(sourcenode)")
-      elseif predicted_variance_comparison(destzone, destmeas, sourcezone, sourcenode, measidxs1, rmat1, ViPredVar, PiPredVar, QiPredVar)
+      # these are the possible data sharing strategies for existing measurements
+      # only one of the following elseif lines should be uncommented at a time,
+      # or none if only new measurements should be shared
+      # the uncommented one MUST be the same as the one uncommented above!
+      elseif share_rmat_predicted_variance(destzone, destmeas, sourcezone, sourcenode, ViPredVar, PiPredVar, QiPredVar, measidxs1, rmat1)
+      #elseif share_oneway_predicted_variance(destzone, destmeas, sourcezone, sourcenode, ViPredVar, PiPredVar, QiPredVar, measidxs1)
+      #elseif share_always(destzone, destmeas, sourcezone, sourcenode)
+      #elseif share_destzero(destzone, destmeas, sourcezone, sourcenode)
+      #elseif share_sourcezero(destzone, destmeas, sourcezone, sourcenode)
       else
         # skip data sharing because it doesn't meet previous checks
         continue
